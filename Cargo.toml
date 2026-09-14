@@ -1,0 +1,11 @@
+[workspace]
+members = ["cli-common", "love", "happiness", "joy"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+clap = "4.5"
+cli-common = { path = "cli-common" }

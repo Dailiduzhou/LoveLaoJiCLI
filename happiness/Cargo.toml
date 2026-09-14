@@ -1,0 +1,8 @@
+[package]
+name = "happiness"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+cli-common.workspace = true
