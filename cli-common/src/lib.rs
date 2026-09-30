@@ -3,7 +3,7 @@
 use clap::{Arg, ArgAction, Command};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Language {
+pub enum Language {
     English,
     Chinese,
 }
@@ -22,11 +22,12 @@ impl Language {
         }
     }
 
-    fn detect() -> Self {
+    pub fn detect() -> Self {
         Self::from_locales(["LC_ALL", "LC_MESSAGES", "LANG"].map(|key| std::env::var(key).ok()))
     }
 
-    fn text(self, english: &'static str, chinese: &'static str) -> &'static str {
+    /// Pick the English or Chinese variant of a text pair.
+    pub fn text<'a>(self, english: &'a str, chinese: &'a str) -> &'a str {
         match self {
             Self::English => english,
             Self::Chinese => chinese,

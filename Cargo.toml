@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli-common", "love", "happiness", "joy"]
+members = ["cli-common", "love", "happiness", "joy", "patience"]
 resolver = "2"
 
 [workspace.package]
@@ -8,4 +8,5 @@ edition = "2021"
 
 [workspace.dependencies]
 clap = "4.5"
+rand = "0.8"
 cli-common = { path = "cli-common" }

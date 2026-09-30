@@ -9,7 +9,7 @@ BIN_DIR="$INSTALL_DIR/bin"
 RECEIPT="$INSTALL_DIR/rc-files"
 BEGIN_MARKER='# >>> LoveLaoJiCLI PATH >>>'
 END_MARKER='# <<< LoveLaoJiCLI PATH <<<'
-TOOLS=(love happiness joy)
+TOOLS=(love happiness joy patience)
 RC_FILES=()
 TEMP_FILE=''
 trap 'if [[ -n "$TEMP_FILE" ]]; then rm -f -- "$TEMP_FILE"; fi' EXIT
@@ -170,7 +170,7 @@ install_tools() {
         if ! grep -Fqx -- "$file" "$RECEIPT"; then printf '%s\n' "$file" >> "$RECEIPT"; fi
         register_path "$file"
     done
-    text 'Installed. Open a new terminal to use love, happiness and joy.' '安装完成。打开新终端即可使用 love、happiness、joy。'
+    text 'Installed. Open a new terminal to use love, happiness, joy and patience.' '安装完成。打开新终端即可使用 love、happiness、joy 和 patience。'
     text 'For the current terminal, run:' '当前终端可执行：'
     if [[ "$SHELL_NAME" == fish ]]; then
         printf '  set -gx PATH %s $PATH\n' "$(quote_path "$BIN_DIR")"

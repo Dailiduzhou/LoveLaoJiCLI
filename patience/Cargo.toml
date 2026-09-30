@@ -1,0 +1,10 @@
+[package]
+name = "patience"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+clap.workspace = true
+cli-common.workspace = true
+rand.workspace = true

@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 mkdir -p "$target/$host/release"
-for tool in love happiness joy; do
+for tool in love happiness joy patience; do
     printf '#!/bin/sh\\nprintf "%s 0.1.0\\\\n"\\n' "$tool" > "$target/$host/release/$tool"
     chmod +x "$target/$host/release/$tool"
 done
@@ -88,7 +88,7 @@ done
         self.run_script("uninstall")
         self.assertEqual(bashrc.read_text(), original)
         self.assertEqual(unrelated.read_text(), "untouched")
-        for tool in ["love", "happiness", "joy"]:
+        for tool in ["love", "happiness", "joy", "patience"]:
             self.assertFalse((self.bin_dir / tool).exists())
         self.run_script("uninstall")
 
