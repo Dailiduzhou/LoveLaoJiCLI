@@ -1,13 +1,14 @@
 //! patience: a fake progress bar for a real command.
 //!
 //! `patience <command> [args...]` runs the command and performs a whole show
-//! around it: random speed curves, repeated stalls with localized comfort
-//! messages, an eternal stall near 99%, and a rapid fill to 100% only if the
-//! child succeeds. The exit code passes through.
+//! around it: a rainbow marquee bar with random speed curves, repeated stalls
+//! with localized comfort messages, an eternal stall near 99%, and a rapid
+//! fill to 100% only if the child succeeds. The exit code passes through.
 
 mod curve;
 mod messages;
 mod plan;
+mod rainbow;
 
 use std::io::{IsTerminal, Read, Write};
 use std::process::{Command, ExitStatus, Stdio};
@@ -20,6 +21,7 @@ use rand::SeedableRng;
 use cli_common::Language;
 use messages::Comfort;
 use plan::{BAR_WIDTH, OUTPUT_CAP};
+use rainbow::Style;
 
 fn main() {
     std::process::exit(run());
@@ -80,6 +82,10 @@ fn run() -> i32 {
     // signal, and no orphans are left behind.
     let show_start = Instant::now();
     let animate = std::io::stderr().is_terminal();
+    let style = Style::detect();
+    if animate {
+        rainbow::prepare_terminal(&style);
+    }
     let mut status: Option<ExitStatus> = None;
     let mut child_elapsed = 0.0;
     let mut segment = usize::MAX;
@@ -102,7 +108,7 @@ fn run() -> i32 {
         }
         progress = plan.progress(elapsed);
         if animate {
-            render(progress, message);
+            render(&style, progress, elapsed / plan.tick, message);
         }
         if status.is_some() && elapsed >= plan.min_show {
             break;
@@ -127,7 +133,8 @@ fn run() -> i32 {
             let step = 100.0 / BAR_WIDTH as f64;
             while progress < 100.0 {
                 progress = (progress + step).min(100.0);
-                render(progress, message);
+                let phase = show_start.elapsed().as_secs_f64() / plan.tick;
+                render(&style, progress, phase, message);
                 std::thread::sleep(Duration::from_secs_f64(plan.fill_frame));
             }
         }
@@ -234,16 +241,8 @@ fn replay(bytes: &[u8], truncated: bool, language: Language, to_stdout: bool) {
     }
 }
 
-fn render(progress: f64, message: &str) {
-    let filled = ((progress / 100.0) * BAR_WIDTH as f64).round() as usize;
-    let filled = filled.clamp(0, BAR_WIDTH);
-    let line = format!(
-        "\r{}{} {:>5.1}% {}\u{1b}[K",
-        "█".repeat(filled),
-        "░".repeat(BAR_WIDTH - filled),
-        progress,
-        message
-    );
+fn render(style: &Style, progress: f64, phase: f64, message: &str) {
+    let line = rainbow::render_line(style, progress, phase, message);
     let mut stderr = std::io::stderr().lock();
     stderr.write_all(line.as_bytes()).ok();
     stderr.flush().ok();
