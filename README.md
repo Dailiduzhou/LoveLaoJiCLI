@@ -90,6 +90,9 @@ patience -- git status  # 子命令带 -- 开头的参数时用 -- 分隔
 patience patience sleep 5  # 套两层，同时看两条进度条 / nest it to watch two bars at once
 ```
 
+实现细节与设计巧思见 [`patience/README-zh.md`](patience/README-zh.md)。
+Implementation notes and design decisions: [`patience/README.md`](patience/README.md).
+
 隐藏测试钩子（不写入 `--help`）：`PATIENCE_SEED=<u64>` 固定随机，`PATIENCE_FAST=1` 将所有时间缩至 1%。
 Hidden test hooks (not in `--help`): `PATIENCE_SEED=<u64>` fixes randomness; `PATIENCE_FAST=1` scales every timing to 1%.
 

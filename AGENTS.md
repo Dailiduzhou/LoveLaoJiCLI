@@ -15,4 +15,4 @@ tools (status):
    - exit code passes through from the child (128+N on signals).
    - not a TTY: no animation, plain result line.
 
-behavior specs live in README.md (bilingual). keep install.sh, README.md and workspace members in sync when adding or changing a tool.
+behavior specs live in README.md (bilingual); per-tool deep dives live in the tool's own README.md (en-US) and README-zh.md (zh-CN). keep install.sh, README.md and workspace members in sync when adding or changing a tool.
