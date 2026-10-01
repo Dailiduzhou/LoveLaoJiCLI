@@ -74,6 +74,12 @@ love、happiness、joy 不提供子命令或其他参数。No subcommands or add
   Exit codes pass through from the child (128+N on signals); Ctrl+C reaches the child via the shared process group.
 - 子进程输出被捕获（每流上限 1MiB），进度条结束后回放。
   Child output is captured (1 MiB per stream) and replayed after the bar.
+- 进度条是彩虹跑马灯：调色板取自 `colors.png` 的无缝循环渐变，色带界线默认斜 45°，每帧滑动一格；填充段为动画彩虹，空段仍是灰色 `░`。
+  The bar is a rainbow marquee: a seamless looping palette sampled from `colors.png`, band boundaries slanted 45° by default, sliding one cell per frame; the filled part is the animated rainbow, the empty part stays gray `░`.
+- 按终端能力自动降级：真彩 → 256 色 → 16 色 → 无色原样；尊重 `NO_COLOR` 与 `TERM=dumb`，非 TTY 照旧不渲染。
+  Colors degrade with the terminal's capability: truecolor → 256 → 16 → plain; `NO_COLOR` and `TERM=dumb` are honored, and non-TTY runs still render nothing.
+- 特判：前缀每多写一个 `patience` 记号，就同时多显示一条独立演出的进度条，真实命令仍是它们之后的那个（`patience patience sleep 3` 同时显示两条）。
+  Special case: each extra leading `patience` token adds one more independently performing bar to the show; the real command is whatever follows them (`patience patience sleep 3` shows two bars at once).
 - 非 TTY 环境不渲染动画，只输出回放与结果行。
   Not a TTY: no animation, just the replay and result line.
 
@@ -81,6 +87,7 @@ love、happiness、joy 不提供子命令或其他参数。No subcommands or add
 patience make -j4        # 假装在认真编译
 patience sleep 5        # 看看它卡在 98% 时的表情
 patience -- git status  # 子命令带 -- 开头的参数时用 -- 分隔
+patience patience sleep 5  # 套两层，同时看两条进度条 / nest it to watch two bars at once
 ```
 
 隐藏测试钩子（不写入 `--help`）：`PATIENCE_SEED=<u64>` 固定随机，`PATIENCE_FAST=1` 将所有时间缩至 1%。
