@@ -3,7 +3,9 @@
 //! `patience <command> [args...]` runs the command and performs a whole show
 //! around it: a rainbow marquee bar with random speed curves, repeated stalls
 //! with localized comfort messages, an eternal stall near 99%, and a rapid
-//! fill to 100% only if the child succeeds. The exit code passes through.
+//! fill to 100% only if the child succeeds. Each extra leading `patience`
+//! token adds one more independently performing bar to the same show. The
+//! exit code passes through.
 
 mod curve;
 mod messages;
@@ -21,7 +23,7 @@ use rand::SeedableRng;
 use cli_common::Language;
 use messages::Comfort;
 use plan::{BAR_WIDTH, OUTPUT_CAP};
-use rainbow::Style;
+use rainbow::{Style, PERIOD};
 
 fn main() {
     std::process::exit(run());
@@ -30,10 +32,13 @@ fn main() {
 fn run() -> i32 {
     let language = Language::detect();
     let matches = build_command(language).get_matches();
-    let command: Vec<String> = matches
+    let tokens: Vec<String> = matches
         .get_many::<String>("command")
         .map(|values| values.cloned().collect())
         .unwrap_or_default();
+    // Leading `patience` tokens never become the child: each one adds another
+    // bar to the show instead, and the real command starts after them.
+    let (bars, command) = split_bars(&tokens);
     if command.is_empty() {
         eprintln!(
             "{}",
@@ -56,9 +61,18 @@ fn run() -> i32 {
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or_else(rand::random);
-    let mut rng = StdRng::seed_from_u64(seed);
-    let plan = plan::generate(&mut rng, scale);
-    let mut comfort = Comfort::new(language, &mut rng);
+    // Every bar performs its own independent show, reproducible from the one
+    // seed. Timings are shared because generate() derives them from `scale`.
+    let mut shows: Vec<Show> = (0..bars)
+        .map(|index| Show::new(language, derive_seed(seed, index), scale))
+        .collect();
+    let tick = shows[0].plan.tick;
+    let fill_frame = shows[0].plan.fill_frame;
+    // The show runs at least until the slowest bar's script allows an exit.
+    let min_show = shows
+        .iter()
+        .map(|show| show.plan.min_show)
+        .fold(0.0, f64::max);
 
     let mut child = match Command::new(&command[0])
         .args(&command[1..])
@@ -88,9 +102,7 @@ fn run() -> i32 {
     }
     let mut status: Option<ExitStatus> = None;
     let mut child_elapsed = 0.0;
-    let mut segment = usize::MAX;
-    let mut message = "";
-    let mut progress;
+    let mut redrawn = false;
     loop {
         if status.is_none() {
             if let Some(exit) = child.try_wait().expect("child should be waitable") {
@@ -99,24 +111,20 @@ fn run() -> i32 {
             }
         }
         let elapsed = show_start.elapsed().as_secs_f64();
-        let current = plan.segment_at(elapsed);
-        if current != segment {
-            segment = current;
-            if plan.segments[current].is_stall() {
-                message = comfort.draw(&mut rng);
-            }
+        for show in &mut shows {
+            show.advance(elapsed);
         }
-        progress = plan.progress(elapsed);
         if animate {
-            render(&style, progress, elapsed / plan.tick, message);
+            render(&style, &shows, elapsed / tick, redrawn);
+            redrawn = true;
         }
-        if status.is_some() && elapsed >= plan.min_show {
+        if status.is_some() && elapsed >= min_show {
             break;
         }
         let wait = if status.is_some() {
-            (plan.min_show - elapsed).clamp(0.0, plan.tick)
+            (min_show - elapsed).clamp(0.0, tick)
         } else {
-            plan.tick
+            tick
         };
         std::thread::sleep(Duration::from_secs_f64(wait));
     }
@@ -129,16 +137,18 @@ fn run() -> i32 {
 
     if animate {
         if success {
-            // The victory lap: sprint from wherever we are to 100%.
+            // The victory lap: every bar sprints from wherever it is to 100%.
             let step = 100.0 / BAR_WIDTH as f64;
-            while progress < 100.0 {
-                progress = (progress + step).min(100.0);
-                let phase = show_start.elapsed().as_secs_f64() / plan.tick;
-                render(&style, progress, phase, message);
-                std::thread::sleep(Duration::from_secs_f64(plan.fill_frame));
+            while shows.iter().any(|show| show.progress < 100.0) {
+                for show in &mut shows {
+                    show.progress = (show.progress + step).min(100.0);
+                }
+                let phase = show_start.elapsed().as_secs_f64() / tick;
+                render(&style, &shows, phase, true);
+                std::thread::sleep(Duration::from_secs_f64(fill_frame));
             }
         }
-        // Retire the bar line: on failure it stays parked where it stalled.
+        // Retire the bars: on failure they stay parked where they stalled.
         eprintln!();
     }
 
@@ -148,6 +158,66 @@ fn run() -> i32 {
     replay(&stderr, stderr_truncated, language, false);
     println!("{}", result_line(language, success, child_elapsed, code));
     code
+}
+
+/// One bar's whole independent performance, bound to the shared child: its
+/// own random script, its own comfort deck, its own message and progress.
+struct Show {
+    plan: plan::Plan,
+    comfort: Comfort,
+    rng: StdRng,
+    message: &'static str,
+    segment: usize,
+    progress: f64,
+}
+
+impl Show {
+    fn new(language: Language, seed: u64, scale: f64) -> Self {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let plan = plan::generate(&mut rng, scale);
+        let comfort = Comfort::new(language, &mut rng);
+        Self {
+            plan,
+            comfort,
+            rng,
+            message: "",
+            segment: usize::MAX,
+            progress: 0.0,
+        }
+    }
+
+    /// Play the show's script to `elapsed` seconds, drawing a new comfort
+    /// message whenever it enters a stall.
+    fn advance(&mut self, elapsed: f64) {
+        let current = self.plan.segment_at(elapsed);
+        if current != self.segment {
+            self.segment = current;
+            if self.plan.segments[current].is_stall() {
+                self.message = self.comfort.draw(&mut self.rng);
+            }
+        }
+        self.progress = self.plan.progress(elapsed);
+    }
+}
+
+/// Special case for nesting: leading `patience` tokens add one bar each
+/// instead of becoming the child. Returns the bar count and the real command
+/// that follows them (an empty rest means there is nothing to wait for).
+fn split_bars(tokens: &[String]) -> (usize, &[String]) {
+    let nested = tokens
+        .iter()
+        .take_while(|token| token.as_str() == "patience")
+        .count();
+    (nested + 1, &tokens[nested..])
+}
+
+/// Mix the run seed with a bar's index (splitmix64 finalizer) so every bar
+/// gets an independent yet reproducible random stream from the one seed.
+fn derive_seed(seed: u64, index: usize) -> u64 {
+    let mut z = seed ^ (index as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1AE4_1BC9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
 }
 
 fn build_command(language: Language) -> ClapCommand {
@@ -241,10 +311,30 @@ fn replay(bytes: &[u8], truncated: bool, language: Language, to_stdout: bool) {
     }
 }
 
-fn render(style: &Style, progress: f64, phase: f64, message: &str) {
-    let line = rainbow::render_line(style, progress, phase, message);
+/// One frame of every bar, stacked and refreshed in place: the first frame
+/// paints all the lines, later frames climb back up with a cursor escape and
+/// repaint. Each bar's rainbow phase is spread across the palette so stacked
+/// bars never look like copies.
+fn render(style: &Style, shows: &[Show], phase: f64, redrawn: bool) {
+    let bars = shows.len();
+    let mut frame = String::new();
+    if redrawn && bars > 1 {
+        frame.push_str(&format!("\u{1b}[{}A", bars - 1));
+    }
+    for (index, show) in shows.iter().enumerate() {
+        if index > 0 {
+            frame.push('\n');
+        }
+        let offset = index as f64 * PERIOD / bars as f64;
+        frame.push_str(&rainbow::render_line(
+            style,
+            show.progress,
+            phase + offset,
+            show.message,
+        ));
+    }
     let mut stderr = std::io::stderr().lock();
-    stderr.write_all(line.as_bytes()).ok();
+    stderr.write_all(frame.as_bytes()).ok();
     stderr.flush().ok();
 }
 
@@ -279,4 +369,44 @@ fn exit_code(status: &ExitStatus) -> i32 {
 #[cfg(not(unix))]
 fn exit_code(status: &ExitStatus) -> i32 {
     status.code().unwrap_or(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{derive_seed, split_bars};
+
+    #[test]
+    fn leading_patience_tokens_add_bars_not_children() {
+        let cases: &[(&[&str], usize, &[&str])] = &[
+            (&[], 1, &[]),
+            (&["sleep", "3"], 1, &["sleep", "3"]),
+            (&["patience", "sleep", "3"], 2, &["sleep", "3"]),
+            (&["patience", "patience", "ls", "-la"], 3, &["ls", "-la"]),
+            (&["patience", "patience", "patience"], 4, &[]),
+            (&["patience", "--help"], 2, &["--help"]),
+            (&["./patience", "sleep"], 1, &["./patience", "sleep"]),
+            (&["Patience", "sleep"], 1, &["Patience", "sleep"]),
+        ];
+        for &(input, bars, rest) in cases {
+            let tokens: Vec<String> = input.iter().map(|token| token.to_string()).collect();
+            let (got_bars, got_rest) = split_bars(&tokens);
+            assert_eq!(got_bars, bars, "input {input:?}");
+            let expected: Vec<String> = rest.iter().map(|token| token.to_string()).collect();
+            assert_eq!(got_rest, expected.as_slice(), "input {input:?}");
+        }
+    }
+
+    #[test]
+    fn bar_seeds_are_stable_and_distinct() {
+        assert_eq!(derive_seed(7, 0), derive_seed(7, 0));
+        let zeroth = derive_seed(7, 0);
+        for index in 1..8 {
+            assert_ne!(
+                derive_seed(7, index),
+                zeroth,
+                "bar {index} shares its stream"
+            );
+        }
+        assert_ne!(derive_seed(7, 1), derive_seed(8, 1));
+    }
 }

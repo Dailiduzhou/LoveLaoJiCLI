@@ -158,3 +158,51 @@ fn double_dash_separates_patience_flags_from_child_flags() {
     assert!(stdout.contains("ok"), "{stdout:?}");
     assert!(stdout.contains("exit 0"), "{stdout:?}");
 }
+
+#[test]
+fn nested_patience_runs_the_real_child_behind_extra_bars() {
+    let output = show(
+        &["patience", "printf", "nested"],
+        &[("LANG", "en_US.UTF-8")],
+    );
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("nested"), "{stdout:?}");
+    assert!(stdout.contains("✓ Done!"), "{stdout:?}");
+    // Not a TTY: none of the stacked bars leak into piped output.
+    assert!(!stdout.contains('\r'), "{stdout:?}");
+    assert!(!stdout.contains('░'), "{stdout:?}");
+}
+
+#[test]
+fn deeply_nested_patience_keeps_one_real_child() {
+    let output = show(
+        &["patience", "patience", "patience", "printf", "ok"],
+        &[("LANG", "zh_CN.UTF-8")],
+    );
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("ok"), "{stdout:?}");
+    assert!(stdout.contains("✓ 成了！"), "{stdout:?}");
+}
+
+#[test]
+fn nested_patience_without_a_real_command_quips() {
+    let output = invoke(&["patience"], &[("LANG", "en_US.UTF-8")], &[]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("Usage: patience <command>"),
+        "missing usage in {stderr:?}"
+    );
+}
+
+#[test]
+fn nested_patience_with_only_flags_reports_spawn_failure() {
+    let output = show(&["patience", "--help"], &[("LANG", "en_US.UTF-8")]);
+    assert_eq!(output.status.code(), Some(127));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("✗ It failed."), "{stdout:?}");
+    assert!(stdout.contains("exit 127"), "{stdout:?}");
+}
