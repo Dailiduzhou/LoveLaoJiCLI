@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 mkdir -p "$target/$host/release"
-for tool in love happiness joy patience; do
+for tool in love happiness joy patience sprinkle later enough stuck; do
     printf '#!/bin/sh\\nprintf "%s 0.1.0\\\\n"\\n' "$tool" > "$target/$host/release/$tool"
     chmod +x "$target/$host/release/$tool"
 done
@@ -83,12 +83,18 @@ done
         self.assertEqual(result.stdout.splitlines()[0], str(self.bin_dir / "love"))
         self.assertIn("love 0.1.0", result.stdout)
         self.assertEqual(result.stdout.splitlines()[-1].split(":").count(str(self.bin_dir)), 1)
+        for tool in ["love", "happiness", "joy", "patience", "sprinkle", "later", "enough", "stuck"]:
+            self.assertTrue((self.bin_dir / tool).is_file())
+        saved_state = self.home / ".local/state/lovelaojicli/keep-card"
+        saved_state.parent.mkdir(parents=True)
+        saved_state.write_text("user context")
         unrelated = self.bin_dir / "keep-me"
         unrelated.write_text("untouched")
         self.run_script("uninstall")
         self.assertEqual(bashrc.read_text(), original)
         self.assertEqual(unrelated.read_text(), "untouched")
-        for tool in ["love", "happiness", "joy", "patience"]:
+        self.assertEqual(saved_state.read_text(), "user context")
+        for tool in ["love", "happiness", "joy", "patience", "sprinkle", "later", "enough", "stuck"]:
             self.assertFalse((self.bin_dir / tool).exists())
         self.run_script("uninstall")
 

@@ -122,3 +122,69 @@ mod tests {
         assert_eq!(Language::from_locales([]), Language::English);
     }
 }
+
+#[cfg(unix)]
+pub mod git;
+#[cfg(unix)]
+pub mod process;
+#[cfg(unix)]
+pub mod repeat;
+#[cfg(unix)]
+pub mod state;
+
+/// Extensible scaffolding; the blessing tools intentionally retain their exact help layout.
+pub fn command(name: &'static str, about: &'static str) -> Command {
+    let l = Language::detect();
+    Command::new(name)
+        .disable_help_subcommand(true)
+        .subcommand_help_heading(l.text("Commands", "子命令"))
+        .next_help_heading(l.text("Options", "选项"))
+        .version(env!("CARGO_PKG_VERSION"))
+        .about(about)
+        .disable_help_flag(true)
+        .disable_version_flag(true)
+        .help_template(l.text(
+            "{name} {version}\n{about}\n\nUsage: {usage}\n\n{all-args}",
+            "{name} {version}\n{about}\n\n用法：{usage}\n\n{all-args}",
+        ))
+        .arg(
+            Arg::new("help")
+                .short('h')
+                .long("help")
+                .action(ArgAction::Help)
+                .help(l.text("Print help", "显示帮助")),
+        )
+        .arg(
+            Arg::new("version")
+                .short('V')
+                .long("version")
+                .alias("verison")
+                .action(ArgAction::Version)
+                .help(l.text("Print version", "显示版本")),
+        )
+}
+
+pub type Result<T> = std::io::Result<T>;
+pub fn error(en: &str, zh: &str) -> std::io::Error {
+    std::io::Error::other(Language::detect().text(en, zh).to_owned())
+}
+/// Escape terminal controls, including newlines in filenames and user text.
+pub fn display(value: impl AsRef<std::ffi::OsStr>) -> String {
+    value
+        .as_ref()
+        .to_string_lossy()
+        .chars()
+        .flat_map(|c| {
+            if c.is_control() {
+                c.escape_default().collect::<Vec<_>>()
+            } else {
+                vec![c]
+            }
+        })
+        .collect()
+}
+pub fn text_input(value: &str, max: usize) -> Option<String> {
+    let text = value.trim();
+    (!text.is_empty() && text.chars().count() <= max && !text.chars().any(char::is_control))
+        .then(|| text.to_owned())
+}

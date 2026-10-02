@@ -4,7 +4,8 @@
 
 ## 构建与运行 / Build and run
 
-需要 Rust 和 Cargo（stable）。Requires stable Rust and Cargo.
+需要 Rust 1.89+ 和 Cargo。首批工具支持 Linux、macOS、WSL Linux 用户空间；Git 功能需要本机 Git。
+Requires Rust 1.89+ and Cargo. First-batch tools support Linux, macOS and WSL Linux; Git features require local Git.
 
 ```sh
 cargo build --workspace --release
@@ -21,8 +22,8 @@ cargo run -p joy
 cargo run -p patience -- sh -c 'echo hi'
 ```
 
-四个工具分别位于 `love/`、`happiness/`、`joy/`、`patience/`，共用 `cli-common/` 中的参数与语言处理。
-Each tool has its own directory; `cli-common/` shares argument and locale handling.
+八个工具各有独立目录：`love/`、`happiness/`、`joy/`、`patience/`、`sprinkle/`、`later/`、`enough/`、`stuck/`，共用 `cli-common/`。
+Each tool is independently usable; `cli-common/` shares CLI, locale, private state, Git snapshots and execution plumbing.
 
 ## 交互式安装与卸载 / Interactive installation
 
@@ -37,20 +38,20 @@ Run with Bash on Linux/macOS, without sudo. Installation requires Rust, Cargo an
 ```
 
 - 安装前需输入 `y` 确认；空输入或 EOF 取消，不更改配置。
-- 使用锁定依赖编译四个工具的本机 release 版本，安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`。
+- 使用锁定依赖编译八个工具的本机 release 版本，安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`。
 - 按 `$SHELL` 自动配置 PATH：Bash 使用 `.bashrc` 和生效的登录配置文件；Zsh 使用 `${ZDOTDIR:-$HOME}` 中的 `.zshrc`、`.zprofile`；Fish 使用 `${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/lovelaojicli.fish`。
 - PATH 配置带有项目专属标记，重复安装不会重复添加。安装目录优先于原有 PATH，其他位置的同名程序不会被覆盖。
-- 卸载不需要 Rust，按安装记录移除四个工具及本项目 PATH 配置，保留其他配置、文件和源码构建产物。
+- 卸载不需要 Rust，按安装记录移除八个工具及本项目 PATH 配置，保留其他配置、文件和源码构建产物。
 - 脚本提示按 locale 切换中英文。若设置了自定义 XDG 目录，卸载时请保持相同的 `XDG_DATA_HOME`。
 
-Installation asks for confirmation, builds all four release binaries and registers the user-local directory in your Bash/Zsh/Fish startup configuration. Reinstallation is idempotent. Uninstallation removes only managed binaries and PATH blocks; Rust is not required. Keep the same `XDG_DATA_HOME` when uninstalling.
+Installation asks for confirmation, builds all eight release binaries and registers the user-local directory in your Bash/Zsh/Fish startup configuration. Reinstallation is idempotent. Uninstallation removes only managed binaries and PATH blocks; Rust is not required. Keep the same `XDG_DATA_HOME` when uninstalling.
 
 **安装后打开新终端即可使用命令**，或执行脚本最后打印的 PATH 命令，立即在当前终端生效。脚本不能直接修改父终端环境，请勿 `source install.sh`。卸载后也请打开新终端刷新 PATH 和命令缓存。
 Open a new terminal after installation/uninstallation. To use the tools immediately, run the PATH command printed by the installer. Execute the installer; do not source it.
 
 ## 最小功能 / Features
 
-- 直接运行：输出一句对应的中英文祝福。No arguments: print a localized message.
+- `love/happiness/joy` 直接运行：输出一句中英文祝福。These three tools print a localized blessing with no arguments.
 - `--help` / `-h`：显示帮助。Show help.
 - `--version` / `-V`：显示版本。Show version.
 - `--verison`：兼容最初说明中的拼写。Accepted as a compatibility alias.
@@ -96,6 +97,62 @@ Implementation notes and design decisions: [`patience/README.md`](patience/READM
 隐藏测试钩子（不写入 `--help`）：`PATIENCE_SEED=<u64>` 固定随机，`PATIENCE_FAST=1` 将所有时间缩至 1%。
 Hidden test hooks (not in `--help`): `PATIENCE_SEED=<u64>` fixes randomness; `PATIENCE_FAST=1` scales every timing to 1%.
 
+## 首批工具 / First batch
+
+按 `project.md` 第二部分的 MVP 实现，不包含第一部分的未来参数。
+Implements the MVP in part 2 of `project.md`, not every option in the original ideas.
+
+```sh
+sprinkle                       # HEAD 的隔离副本 / isolated HEAD copy
+sprinkle worktree              # 同上 / same as the default
+sprinkle diff                  # 创建时的插入补丁 / original insertion patch
+sprinkle undo                  # 验证无额外工作才撤销 / verified undo only
+later --next "check token expiry"  # headless 保存 / save
+later                          # 交互只问一个问题 / one interactive question
+later resume                   # 显示，不执行 / display, never execute
+enough cargo test             # 最近真实成功后 5 分钟内提醒 / recent-success reminder
+enough --again cargo test     # 始终执行 / always execute
+stuck cargo test               # 三次相同失败后要求假设 / hypothesis after three equal failures
+stuck --hypothesis "increase timeout" cargo test
+```
+
+- **sprinkle**：源 checkout 必须干净；仅在旁边新建的受管理 worktree 中插入注释。支持 Markdown、Go、Rust、C/C++，仅考虑可确认安全的文件末尾；固定 25% 文件概率，每文件一条，最多 100 条，零条也成功。原 checkout 文件与分支不变，Git common dir 会新增登记。副本是 HEAD，不是完整备份；不保证任意仓库都能编译，不执行脚本验证。
+  Requires a clean source; adds conservative EOF comments only in its new worktree. Fixed 25% selection, one per file, 100 total; zero additions is valid. The original checkout stays unchanged, but shared Git metadata gains a branch/worktree. This is a HEAD copy, not a backup or compilation guarantee.
+- **later**：每个 worktree 一张最新卡片；非 Git 按当前目录保存。`--next` 为非空单行，最多 2,000 字符。没有交互终端也没有 `--next`，立即返回 125，不读取管道、不覆盖旧卡片。
+  One latest card per worktree (per cwd without Git). `--next` is a nonempty single line, at most 2,000 characters. Without a foreground terminal or explicit answer it returns 125, without consuming pipes or replacing the old card.
+- **enough**：同 cwd/argv、稳定代码快照、最近真实成功完成后 5 分钟内才可能跳过，提示写 stderr，stdout 留空。`--again` 总是执行，失败会清除旧成功资格；跳过不刷新窗口。不是构建缓存，不能证明外部服务、忽略文件或 stdin 没变。
+  Can skip only a matching invocation with a stable snapshot within five minutes of real success. Notices use stderr; skips have empty stdout and do not extend the window. `--again` always runs and invalidates old success on failure. This is not a build cache or proof about external state.
+- **stuck**：连续三次相同 invocation/代码/退出码/两流原始字节失败后，第四次要求假设。假设为非空单行、最多 512 字符，仅放行一次；成功、变化、并发歧义或不完整输出重置链。实时分别转发 stdout/stderr，固定内存增量摘要，不保存输出；管道使子命令看不到 TTY，不是 PTY 包装器。
+  Three equal failures gate the fourth call. A nonempty single-line hypothesis (512 characters maximum) grants one execution, not permanent bypass. Success, changes, overlap or incomplete output break the chain. Streams are forwarded live and hashed separately with bounded memory; no output bodies are stored. The child sees pipes, not a PTY.
+
+业务选项必须在子命令前；子命令之后的参数原样传递，必要时用 `--` 分隔。包装器直接执行程序，不拼接 shell；stdin 继承。
+Put wrapper options before the child command. Child arguments retain their boundaries; use `--` for disambiguation. No implicit shell is involved, and child stdin is inherited.
+
+包装器在非 Git、Git/状态/锁/指纹故障、管道或重定向 stdin、无法确认前台交互时放行真实命令，不凭不可靠信息跳过或拦截。未找到子程序返回 127，不可执行返回 126；真实退出码透传，信号映射 128+N。工具业务/持久化失败为 1，用法错误为 2，无法取得回答/主动拦截为 125。Ctrl+C 通过共享前台进程组送达；不约束自行 daemonize 的程序。
+Wrappers fail open when Git/state/locks/snapshots are unavailable or stdin is not comparable (including pipelines and redirected input). Launch errors use 127/126; real child codes pass through, signals map to 128+N. Tool errors use 1, usage errors 2, and unavailable answers/interception 125. Foreground signals reach the shared process group; deliberately daemonizing commands are outside this guarantee.
+
+所有首批工具不需要桌面、不联网、不上传、不读取 shell history、不装 shell hook；工具自身不输出 ANSI，适用于 SSH/headless、`NO_COLOR` 和 `TERM=dumb`。子命令原始输出不翻译或删改。
+All first-batch tools are desktop-free, offline and local-only, with no telemetry, history scanning or shell hooks. Tool-generated output has no ANSI escapes; child output stays untranslated and unchanged.
+
+详解 / Deep dives: [sprinkle](sprinkle/README.md) · [中文](sprinkle/README-zh.md)；[later](later/README.md) · [中文](later/README-zh.md)；[enough](enough/README.md) · [中文](enough/README-zh.md)；[stuck](stuck/README.md) · [中文](stuck/README-zh.md)。
+
+### 本地状态、隐私与故障 / State, privacy and failures
+
+状态根目录为 `${XDG_STATE_HOME:-$HOME/.local/state}/lovelaojicli/`。空/非绝对 XDG 路径回退到绝对 HOME；两者都不可用时不写 cwd 或 `/tmp`。受管理目录 0700、文件 0600；不跟随状态符号链接，不接受不可信权限。采用同目录原子替换、同步、非阻塞 OS 文件锁、版本化 JSON 与带密钥 BLAKE3 校验。锁只协调本工具，不能阻止编辑器或其他 Git 进程；权限/锁语义不可靠的网络盘或 WSL 挂载盘会拒绝记录或保守降级。
+State lives under the path above. Invalid XDG paths fall back to absolute HOME, never cwd or `/tmp`. Managed directories/files use 0700/0600, symlinks and unsafe permissions are rejected. Records use same-directory atomic replacement, sync, nonblocking OS locks, versioned JSON and keyed BLAKE3 checksums. Locks coordinate these tools only; filesystems without reliable permission/lock semantics are not promised equivalent safety.
+
+命令参数只保留按边界编码的本地带密钥摘要和程序 basename；不保存 argv 原文、完整 stdout/stderr 或环境变量。**下一步和假设是本地明文，勿填写密码、令牌或其他秘密**；命令行参数还可能进入 shell 历史或进程列表。仓库路径、文件名、Git 元数据和 sprinkle 补丁也可能敏感。密钥丢失/损坏会使旧记录失效，校验摘要不等于加密。
+Arguments are retained only as a keyed, boundary-preserving digest plus program basename, not raw argv, output bodies or environment. **Next actions and hypotheses are plaintext: never enter secrets.** CLI values can also appear in shell history/process lists. Paths, filenames, Git metadata and sprinkle patches can be sensitive. Lost/corrupt identity keys invalidate old records; hashing is not encryption.
+
+真实执行记录和假设在相关调用时惰性清理超过 30 天的可识别、非活动记录；损坏/未知版本不盲删。latest 卡片保留到成功覆盖，活动 sprinkle 元数据不按时间删除。卸载仅删除程序和 PATH 配置，保留卡片、执行记录及 worktree。
+Recognized inactive runs/hypotheses older than 30 days are lazily pruned; unknown/corrupt records are left alone. Cards remain until successfully replaced; active sprinkle sessions never expire. Uninstallation preserves all user state and worktrees.
+
+代码快照包含 HEAD、索引条目、文件内容/删除/类型/可执行位、符号链接文本、非忽略未跟踪文件与 cwd；两次扫描核对一致性，并在执行前后比较。最多 20,000 条目、累计读取 256 MiB、5 秒扫描预算；超预算、冲突、子模块、过滤器或竞争都放弃重复优化。快照不涵盖忽略文件、网络、数据库、环境和时间，不是文件系统事务。
+Snapshots include HEAD, index entries, contents/deletions/types/modes, symlink text, nonignored untracked files and cwd. Two scans detect changes, and execution has pre/post snapshots. Budgets are 20,000 entries, 256 MiB total reads and five seconds; overflow, conflicts, submodules, configured filters or races disable optimization. This is not a filesystem transaction or evidence about ignored/external state.
+
+隐藏测试钩子：`SPRINKLE_SEED=<u64>` 固定注释选择；只保证同版本、Git 内容、locale 与候选顺序的可复现性，不控制随机资源 ID，不显示于帮助。包装器测试使用真实 PTY，不提供绕过输入安全判断的测试开关。
+Hidden test hook: `SPRINKLE_SEED=<u64>` fixes comment selection for the same version/content/locale/candidate order, not resource IDs. Wrapper tests use real PTYs, not safety-bypass flags.
+
 ## 语言 / Language
 
 按 `LC_ALL` → `LC_MESSAGES` → `LANG` 的顺序，采用首个非空值。
@@ -123,7 +180,7 @@ Help and default messages are localized; versions are language-neutral, and argu
 
 ```sh
 cargo fmt --all -- --check
-cargo test --workspace
+cargo test --workspace             # 新增集成测试需要 Git 和 Python 3 / Git + Python 3 required
 cargo clippy --workspace --all-targets -- -D warnings
 
 # 安装脚本测试（需要 Python 3；隔离 HOME，使用模拟编译器）

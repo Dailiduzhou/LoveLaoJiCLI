@@ -1,13 +1,14 @@
 [package]
-name = "cli-common"
+name = "later"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 publish = false
 
 [dependencies]
+cli-common.workspace = true
 clap.workspace = true
-rand.workspace = true
 serde.workspace = true
+
+[dev-dependencies]
 serde_json.workspace = true
-blake3.workspace = true
-rustix.workspace = true
