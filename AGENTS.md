@@ -4,7 +4,7 @@ each tool has their own folders.
 support zh-CN and en-US. change display language according to locale (LC_ALL -> LC_MESSAGES -> LANG).
 share locale detection and clap scaffolding in `cli-common/`.
 
-dependencies: clap/rand plus narrowly scoped serde/serde_json (records), blake3 (stable keyed fingerprints), and rustix (Unix ownership/foreground checks) are allowed for the first batch. Prefer std for everything else. workspace version stays in sync across all crates.
+dependencies: clap/rand plus narrowly scoped serde/serde_json (records), blake3 (stable keyed fingerprints), and rustix (Unix ownership/foreground and stdin-type checks) are allowed for the first and second batches. Prefer std for everything else. workspace version stays in sync across all crates.
 love/happiness/joy keep only basic flags. New tools support only the MVP business arguments in project.md part 2. Test hooks are environment variables, documented in README, never in `--help`.
 
 tools (status):
@@ -22,5 +22,13 @@ tools (status):
    - first-batch tools support Linux/macOS/WSL Unix; Git CLI is local-only.
    - state failures fail open for wrappers, fail closed for later/sprinkle.
    - preserve argv boundaries, private state, and destructive-operation ownership checks.
+
+9. duck - four fixed questions or explicit answers; no persistence. (done)
+10. one - global local tasks, stable selection until done; isolated piped selection. (done)
+11. afk - monotonic break timer; plain-text fallback on all terminals. (done, fallback)
+   - no raw mode or keyboard capture; ASCII scenery/key notices remain deferred.
+   - second-batch tools use the existing dependency whitelist; no terminal dependency added.
+   - one state failures fail closed; duck/afk never open state.
+   - ONE_SEED and AFK_FAST are hidden test hooks, not CLI options.
 
 behavior specs live in README.md (bilingual); per-tool deep dives live in the tool's own README.md (en-US) and README-zh.md (zh-CN). keep install.sh, README.md and workspace members in sync when adding or changing a tool.

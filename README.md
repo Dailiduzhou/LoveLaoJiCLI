@@ -2,10 +2,13 @@
 
 爱你老己命令行工具。Love you, dear myself CLI tools, powered by Rust and clap.
 
+实施进度、当前限制、待补验收和后续批次见 [ROADMAP.md](ROADMAP.md)。本 README 描述当前已实现接口，路线图中的未来接口尚不可用。
+See [ROADMAP.md](ROADMAP.md) for implementation status, limitations, outstanding validation and upcoming batches. This README documents implemented interfaces; planned interfaces are not yet available.
+
 ## 构建与运行 / Build and run
 
-需要 Rust 1.89+ 和 Cargo。首批工具支持 Linux、macOS、WSL Linux 用户空间；Git 功能需要本机 Git。
-Requires Rust 1.89+ and Cargo. First-batch tools support Linux, macOS and WSL Linux; Git features require local Git.
+需要 Rust 1.89+ 和 Cargo。首批与第二批工具支持 Linux、macOS、WSL Linux 用户空间；Git 功能需要本机 Git。
+Requires Rust 1.89+ and Cargo. First- and second-batch tools support Linux, macOS and WSL Linux; Git features require local Git.
 
 ```sh
 cargo build --workspace --release
@@ -22,7 +25,7 @@ cargo run -p joy
 cargo run -p patience -- sh -c 'echo hi'
 ```
 
-八个工具各有独立目录：`love/`、`happiness/`、`joy/`、`patience/`、`sprinkle/`、`later/`、`enough/`、`stuck/`，共用 `cli-common/`。
+十一个工具各有独立目录：`love/`、`happiness/`、`joy/`、`patience/`、`sprinkle/`、`later/`、`enough/`、`stuck/`、`duck/`、`one/`、`afk/`，共用 `cli-common/`。
 Each tool is independently usable; `cli-common/` shares CLI, locale, private state, Git snapshots and execution plumbing.
 
 ## 交互式安装与卸载 / Interactive installation
@@ -38,13 +41,13 @@ Run with Bash on Linux/macOS, without sudo. Installation requires Rust, Cargo an
 ```
 
 - 安装前需输入 `y` 确认；空输入或 EOF 取消，不更改配置。
-- 使用锁定依赖编译八个工具的本机 release 版本，安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`。
+- 使用锁定依赖编译十一个工具的本机 release 版本，安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`。
 - 按 `$SHELL` 自动配置 PATH：Bash 使用 `.bashrc` 和生效的登录配置文件；Zsh 使用 `${ZDOTDIR:-$HOME}` 中的 `.zshrc`、`.zprofile`；Fish 使用 `${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/lovelaojicli.fish`。
 - PATH 配置带有项目专属标记，重复安装不会重复添加。安装目录优先于原有 PATH，其他位置的同名程序不会被覆盖。
-- 卸载不需要 Rust，按安装记录移除八个工具及本项目 PATH 配置，保留其他配置、文件和源码构建产物。
+- 卸载不需要 Rust，按安装记录移除十一个工具及本项目 PATH 配置，保留其他配置、文件和源码构建产物。
 - 脚本提示按 locale 切换中英文。若设置了自定义 XDG 目录，卸载时请保持相同的 `XDG_DATA_HOME`。
 
-Installation asks for confirmation, builds all eight release binaries and registers the user-local directory in your Bash/Zsh/Fish startup configuration. Reinstallation is idempotent. Uninstallation removes only managed binaries and PATH blocks; Rust is not required. Keep the same `XDG_DATA_HOME` when uninstalling.
+Installation asks for confirmation, builds all eleven release binaries and registers the user-local directory in your Bash/Zsh/Fish startup configuration. Reinstallation is idempotent. Uninstallation removes only managed binaries and PATH blocks; Rust is not required. Keep the same `XDG_DATA_HOME` when uninstalling.
 
 **安装后打开新终端即可使用命令**，或执行脚本最后打印的 PATH 命令，立即在当前终端生效。脚本不能直接修改父终端环境，请勿 `source install.sh`。卸载后也请打开新终端刷新 PATH 和命令缓存。
 Open a new terminal after installation/uninstallation. To use the tools immediately, run the PATH command printed by the installer. Execute the installer; do not source it.
@@ -99,8 +102,8 @@ Hidden test hooks (not in `--help`): `PATIENCE_SEED=<u64>` fixes randomness; `PA
 
 ## 首批工具 / First batch
 
-按 `project.md` 第二部分的 MVP 实现，不包含第一部分的未来参数。
-Implements the MVP in part 2 of `project.md`, not every option in the original ideas.
+首批 MVP 已实现，不包含原始构想中的全部未来参数；实现状态与后续验收见 [路线图](ROADMAP.md)。本地 `project.md` 保留详细设计，但当前不随仓库分发。
+The first-batch MVP is implemented, not every option in the original ideas; see the [roadmap](ROADMAP.md) for status and follow-up validation. The local `project.md` retains the detailed design but is not currently distributed with the repository.
 
 ```sh
 sprinkle                       # HEAD 的隔离副本 / isolated HEAD copy
@@ -152,6 +155,33 @@ Snapshots include HEAD, index entries, contents/deletions/types/modes, symlink t
 
 隐藏测试钩子：`SPRINKLE_SEED=<u64>` 固定注释选择；只保证同版本、Git 内容、locale 与候选顺序的可复现性，不控制随机资源 ID，不显示于帮助。包装器测试使用真实 PTY，不提供绕过输入安全判断的测试开关。
 Hidden test hook: `SPRINKLE_SEED=<u64>` fixes comment selection for the same version/content/locale/candidate order, not resource IDs. Wrapper tests use real PTYs, not safety-bypass flags.
+
+## 第二批工具 / Second batch
+
+```sh
+duck                          # 前台交互四问 / four foreground questions
+duck --expected "success" --actual "timeout" --last-change "retry logic" --experiment "disable retries"
+one add "check token expiry"
+one                           # 选中一件，保持到 done / stable selection
+one done                      # 完成持久化选中项 / complete persistent selection
+cat TODO.md | one             # 临时选择，不改任务库 / temporary selection
+afk 5m                        # 安静休息；Ctrl+C 取消 / quiet break; Ctrl+C cancels
+```
+
+- **duck**：依次输出 Expected、Actual、Last change、Next experiment，最后 `quack.`。显式参数齐全时不提问；仅对缺项询问，提示走控制终端，完整结果走 stdout。回答 trim 后须为非空单行、最多 2,000 字符，不含控制字符。缺少前台交互、EOF 或无效交互回答返回 125，stdout 留空；不把管道当回答。无落盘、AI、搜索或技术建议。
+  Four fixed answers in order, ending with `quack.`. Complete explicit arguments skip prompts; missing answers require a foreground terminal. Prompts use the controlling terminal, the complete summary uses stdout. Answers are trimmed, nonempty, single-line, at most 2,000 characters, without control characters. Missing interaction, EOF or invalid interactive input returns 125 with empty stdout; pipes are not answers. No persistence, AI, search or advice.
+- **one**：所有目录共用一个本地任务列表（最多 1,000 项，每项最多 2,000 字符，trim 后非空单行且无控制字符）。默认随机选中并保存 ID，添加任务不改变选中项；`done` 删除选中任务，下次 `one` 才重新选择。管道或文件重定向按行临时选择，过滤空行、ATX Markdown 标题、已勾选项，去除常见列表前缀；最多读取 1 MiB UTF-8、1,000 项，不是完整 Markdown parser。临时输入完全不访问状态；`add`/`done` 忽略 stdin，`/dev/null` 使用持久化列表。空列表成功；无选中项的 `done` 不会代选。状态损坏、版本未知或锁争用返回 1，不重置列表。
+  One global local list (1,000 tasks maximum; each a trimmed, nonempty single line of up to 2,000 characters, no controls). Selection is persisted until `done` removes it; adding tasks does not change it. The next bare invocation selects again. Piped/redirected UTF-8 input is temporary (1 MiB / 1,000 tasks maximum), filtering blanks, ATX headings and checked items and stripping common list prefixes; not a full Markdown parser. Temporary input never opens state. `add`/`done` ignore stdin; `/dev/null` uses persistent tasks. Empty lists succeed; `done` without selection does not select one. Corruption, unknown schemas or lock contention fail closed with exit 1.
+- **afk**：接受正整数加 `s/m/h`，不超过 24h；单调时钟安静等待，结束仅输出一行。**本轮所有终端均采用路线图允许的纯文本降级**：不显示 ASCII 场景、不捕捉按键、不修改终端模式；因此没有 raw mode 恢复风险。Ctrl+C 使用默认信号取消，取消不输出完成行；键盘输入不延长时长，但仍由正常终端行规程处理。没有桌面提醒、后台服务或强制休息。
+  Positive integer plus `s/m/h`, at most 24h. Quiet monotonic wait, then one completion line. **This release uses the roadmap's plain-text fallback on every terminal**: no ASCII scenery, key capture or terminal-mode changes, so no raw-mode restoration risk. Ctrl+C cancels through default signal handling without a completion line. Input cannot extend the timer, but normal terminal line discipline still applies. No desktop notifications, daemon or enforced rest.
+
+任务明文保存在状态根目录下 `one/tasks.json`，复用私有权限、原子写入、版本校验和非阻塞锁；完成即从列表删除，不保留完成历史，卸载保留状态。不要输入秘密；参数也可能进入 shell 历史/进程列表。duck/afk 不创建状态，不联网。第二批用法错误为 2，I/O/状态错误为 1，成功为 0；duck 无回答为 125。
+Tasks are local plaintext in `one/tasks.json` under the state root, with shared private permissions, atomic writes, version validation and nonblocking locks. Completion removes the task without history; uninstall preserves state. Do not enter secrets; CLI arguments can enter shell history/process lists. Duck/afk never create state; all three are offline. Usage errors return 2, I/O/state errors 1, success 0; duck without an answer returns 125.
+
+隐藏测试钩子（不在帮助中）：`ONE_SEED=<u64>` 固定同版本/候选顺序的随机选择，不影响任务 ID 或已有选中项；无效值忽略。`AFK_FAST=1` 将等待时长缩至 1%，不放宽时长校验。
+Hidden test hooks (not in help): `ONE_SEED=<u64>` fixes random selection for the same version/candidate order, not task IDs or existing selections; invalid values are ignored. `AFK_FAST=1` scales waits to 1% without relaxing duration validation.
+
+详解 / Deep dives: [duck](duck/README.md) · [中文](duck/README-zh.md)；[one](one/README.md) · [中文](one/README-zh.md)；[afk](afk/README.md) · [中文](afk/README-zh.md)。
 
 ## 语言 / Language
 
