@@ -20,6 +20,11 @@ LEAVE = b"\x1b[?1049l"
 SHOW = b"\x1b[?25h"
 
 
+def has_foreground_color(output):
+    return any(re.search(rb"(^|;)(3[0-7]|9[0-7]|38)(;|$)", codes)
+               for codes in re.findall(rb"\x1b\[([0-9;]*)m", output))
+
+
 def size(fd, rows, columns):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
 
@@ -30,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
     env.pop("AFK_TEST_FAILURE", None)
 
     def run(action=None, fault=None, expected=0, term="xterm", dimensions=(18, 60),
-            duration="100s", chinese=False, suspend_for=None):
+            duration="100s", chinese=False, suspend_for=None, no_color="1"):
         master, slave = pty.openpty()
         size(slave, *dimensions)
         original = termios.tcgetattr(slave)
@@ -50,6 +55,10 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
             if slave > 2:
                 os.close(slave)
             child_env = dict(env, TERM=term)
+            if no_color is None:
+                child_env.pop("NO_COLOR", None)
+            else:
+                child_env["NO_COLOR"] = no_color
             if fault:
                 child_env["AFK_TEST_FAILURE"] = fault
             if chinese:
@@ -113,9 +122,12 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
             assert os.waitstatus_to_exitcode(status) == expected, (action, fault, status, output[-3000:])
             assert termios.tcgetattr(slave) == original, (action, fault, "termios not restored")
             assert b"\x1b[6n" not in output, "cursor query can enable raw mode and consume keys"
+            if no_color:
+                assert not has_foreground_color(output), "NO_COLOR must suppress scene colors"
             if term != "dumb" and dimensions[0] >= 10 and dimensions[1] >= 24:
                 assert ENTER in output and LEAVE in output and SHOW in output, output
                 assert output.rfind(LEAVE) > output.rfind(ENTER), output
+                assert b"\x1b[0m" + SHOW + LEAVE in output, "cleanup must reset colors"
             else:
                 assert ENTER not in output and b"\x1b" not in output, output
             if expected != 0:
@@ -134,6 +146,11 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
                 os.waitpid(pid, 0)
             os.close(master)
             os.close(slave)
+
+    for no_color in (None, ""):
+        out, _ = run(no_color=no_color)
+        assert has_foreground_color(out), "scene should be colored by default"
+    run(action="ctrl-c", expected=-signal.SIGINT, duration="24h", no_color=None)
 
     out, elapsed = run(action="keys")
     visible = re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]", b"", out)
