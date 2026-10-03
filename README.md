@@ -172,8 +172,8 @@ afk 5m                        # 安静休息；Ctrl+C 取消 / quiet break; Ctrl
   Four fixed answers in order, ending with `quack.`. Complete explicit arguments skip prompts; missing answers require a foreground terminal. Prompts use the controlling terminal, the complete summary uses stdout. Answers are trimmed, nonempty, single-line, at most 2,000 characters, without control characters. Missing interaction, EOF or invalid interactive input returns 125 with empty stdout; pipes are not answers. No persistence, AI, search or advice.
 - **one**：所有目录共用一个本地任务列表（最多 1,000 项，每项最多 2,000 字符，trim 后非空单行且无控制字符）。默认随机选中并保存 ID，添加任务不改变选中项；`done` 删除选中任务，下次 `one` 才重新选择。管道或文件重定向按行临时选择，过滤空行、ATX Markdown 标题、已勾选项，去除常见列表前缀；最多读取 1 MiB UTF-8、1,000 项，不是完整 Markdown parser。临时输入完全不访问状态；`add`/`done` 忽略 stdin，`/dev/null` 使用持久化列表。空列表成功；无选中项的 `done` 不会代选。状态损坏、版本未知或锁争用返回 1，不重置列表。
   One global local list (1,000 tasks maximum; each a trimmed, nonempty single line of up to 2,000 characters, no controls). Selection is persisted until `done` removes it; adding tasks does not change it. The next bare invocation selects again. Piped/redirected UTF-8 input is temporary (1 MiB / 1,000 tasks maximum), filtering blanks, ATX headings and checked items and stripping common list prefixes; not a full Markdown parser. Temporary input never opens state. `add`/`done` ignore stdin; `/dev/null` uses persistent tasks. Empty lists succeed; `done` without selection does not select one. Corruption, unknown schemas or lock contention fail closed with exit 1.
-- **afk**：正整数加 `s/m/h`，最多 24h；单调时钟计时。合适的同一前台终端显示 Ratatui 单色 ASCII 草地、剩余时间；普通按键提示 `the grass noticed.`（中文“小草注意到了。”），不惩罚、不重置或延长时长。Ctrl+C 取消；Ctrl+Z 先恢复终端再挂起，时间继续流逝，fg 可重入、bg 不读键盘。非 TTY、输出重定向、TERM 缺失/dumb、后台或启动时小于 24×10 则安静等待，结束仅一行。不使用 Crossterm raw mode，而是保留信号的无回显/非规范输入；RAII 恢复原始 termios、光标和备用屏幕。仅 afk 增加 Ratatui/signal-hook/libc 依赖；SIGKILL、外部 SIGSTOP、abort 或终端断连不可保证清理。详见工具 README 的评估与恢复边界。
-  Positive integer plus `s/m/h`, up to 24h, timed monotonically. A suitable shared foreground terminal gets a monochrome Ratatui ASCII garden and remaining time. Keys show `the grass noticed.` without penalties or timer changes. Ctrl+C cancels; Ctrl+Z restores before stopping, time keeps advancing, fg can resume and bg never reads keys. Non-TTY, redirected output, missing/dumb TERM, background startup or terminals smaller than 24×10 wait quietly and emit one completion line. Cbreak-style input retains signals, with exact termios and screen/cursor RAII restoration—not Crossterm raw mode. Ratatui/signal-hook/libc are scoped to afk. SIGKILL, external SIGSTOP, abort or terminal loss cannot guarantee cleanup; see the tool README for evaluation and boundaries.
+- **afk**：正整数加 `s/m/h`，最多 24h；单调时钟计时。合适的同一前台终端显示 Ratatui 彩色 ASCII 草地、剩余时间（非空 `NO_COLOR` 切换为单色）；普通按键提示 `the grass noticed.`（中文“小草注意到了。”），不惩罚、不重置或延长时长。Ctrl+C 取消；Ctrl+Z 先恢复终端再挂起，时间继续流逝，fg 可重入、bg 不读键盘。非 TTY、输出重定向、TERM 缺失/dumb、后台或启动时小于 24×10 则安静等待，结束仅一行。不使用 Crossterm raw mode，而是保留信号的无回显/非规范输入；RAII 恢复原始 termios、光标和备用屏幕。仅 afk 增加 Ratatui/signal-hook/libc 依赖；SIGKILL、外部 SIGSTOP、abort 或终端断连不可保证清理。详见工具 README 的评估与恢复边界。
+  Positive integer plus `s/m/h`, up to 24h, timed monotonically. A suitable shared foreground terminal gets a colored Ratatui ASCII garden and remaining time (nonempty `NO_COLOR` selects monochrome). Keys show `the grass noticed.` without penalties or timer changes. Ctrl+C cancels; Ctrl+Z restores before stopping, time keeps advancing, fg can resume and bg never reads keys. Non-TTY, redirected output, missing/dumb TERM, background startup or terminals smaller than 24×10 wait quietly and emit one completion line. Cbreak-style input retains signals, with exact termios and screen/cursor RAII restoration—not Crossterm raw mode. Ratatui/signal-hook/libc are scoped to afk. SIGKILL, external SIGSTOP, abort or terminal loss cannot guarantee cleanup; see the tool README for evaluation and boundaries.
 
 任务明文保存在状态根目录下 `one/tasks.json`，复用私有权限、原子写入、版本校验和非阻塞锁；完成即从列表删除，不保留完成历史，卸载保留状态。不要输入秘密；参数也可能进入 shell 历史/进程列表。duck/afk 不创建状态，不联网。第二批用法错误为 2，I/O/状态错误为 1，成功为 0；duck 无回答为 125。
 Tasks are local plaintext in `one/tasks.json` under the state root, with shared private permissions, atomic writes, version validation and nonblocking locks. Completion removes the task without history; uninstall preserves state. Do not enter secrets; CLI arguments can enter shell history/process lists. Duck/afk never create state; all three are offline. Usage errors return 2, I/O/state errors 1, success 0; duck without an answer returns 125.
@@ -235,6 +235,22 @@ LC_ALL=zh_CN.UTF-8 ./target/release/joy --help
 
 帮助与默认输出已本地化；版本号不随语言变化，参数错误保留 clap 的英文诊断。
 Help and default messages are localized; versions are language-neutral, and argument errors use clap's English diagnostics.
+
+## 代码结构 / Code structure
+
+按职责拆分，CLI 参数与本地记录格式不受模块划分影响。
+Modules separate responsibilities without changing CLI arguments or persisted record formats.
+
+- `afk/src/tui.rs`：计时与事件循环；`tui/terminal.rs` 管理终端恢复，`tui/signals.rs` 管理信号与 job-control mask。循环保持守卫的创建/析构顺序。
+  Timer/event loop, terminal restoration, and signal/job-control guards; guard lifetime ordering stays in the loop.
+- `sprinkle/src/`：`manifest` 管理会话元数据，`create` 编排创建事务，`plan` 生成插入计划，`scan` 检查语法边界，`verify` 校验归属，`undo` 执行可恢复撤销。
+  Session metadata, creation transaction, insertion planning, syntax checks, ownership verification, and resumable undo.
+- `one/src/`：`input` 处理独立管道输入，`tasks` 封装记录校验与稳定选择，`main` 保留 CLI 和加锁读写。
+  Isolated stdin parsing, validated task model/stable selection, and CLI/locked persistence.
+- `later/src/`：`main` 编排 CLI 与锁；`card` 管理记录和 Git 上下文采集；`card/display` 只负责展示。
+  CLI/lock orchestration, card schema/Git capture, and read-only presentation.
+- `cli-common/src/repeat/`：enough/stuck 共用 `cli` 调度、`protocol` 执行租约与基线状态机、`records` 历史记录与只读查询；`repeat.rs` 保持公共接口。
+  Shared enough/stuck CLI dispatch, execution lease/baseline protocol, and record/history readers; `repeat.rs` preserves the public API.
 
 ## 测试 / Tests
 
