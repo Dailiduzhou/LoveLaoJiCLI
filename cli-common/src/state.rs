@@ -108,6 +108,31 @@ fn open(path: &Path, create: bool) -> Result<File> {
     }
     Ok(f)
 }
+/// Validate an existing private directory; never create a missing one.
+pub fn existing_private_dir(path: &Path) -> Result<bool> {
+    if let Err(e) = no_links(path) {
+        return if e.kind() == std::io::ErrorKind::NotFound {
+            Ok(false)
+        } else {
+            Err(e)
+        };
+    }
+    let m = fs::metadata(path)?;
+    if !m.is_dir() || m.uid() != rustix::process::geteuid().as_raw() || m.mode() & 0o077 != 0 {
+        return Err(error("Unsafe state directory", "状态目录不安全"));
+    }
+    Ok(true)
+}
+pub fn lock_readonly(path: &Path) -> Result<File> {
+    let f = open(path, false)?;
+    f.try_lock_shared().map_err(|_| {
+        error(
+            "State is busy or locking is unsupported",
+            "状态忙碌或文件系统不支持锁",
+        )
+    })?;
+    Ok(f)
+}
 pub fn lock(path: &Path) -> Result<File> {
     let f = open(path, true)?;
     f.try_lock().map_err(|_| {
@@ -158,8 +183,8 @@ pub struct Store {
     pub key: [u8; 32],
 }
 impl Store {
-    pub fn open() -> Result<Self> {
-        let base = std::env::var_os("XDG_STATE_HOME")
+    fn base() -> Result<PathBuf> {
+        std::env::var_os("XDG_STATE_HOME")
             .map(PathBuf::from)
             .filter(|p| p.is_absolute())
             .or_else(|| {
@@ -173,7 +198,42 @@ impl Store {
                     "No absolute XDG_STATE_HOME or HOME",
                     "缺少绝对路径的 XDG_STATE_HOME 或 HOME",
                 )
-            })?;
+            })
+    }
+    /// Inspect existing state without creating keys, directories, locks or records.
+    /// A missing store is empty; a present store with missing identity is unavailable.
+    pub fn open_readonly() -> Result<Option<Self>> {
+        let base = Self::base()?;
+        if let Err(e) = no_links(&base) {
+            return if e.kind() == std::io::ErrorKind::NotFound {
+                Ok(None)
+            } else {
+                Err(e)
+            };
+        }
+        let metadata = fs::metadata(&base)?;
+        if metadata.uid() != rustix::process::geteuid().as_raw() || metadata.mode() & 0o022 != 0 {
+            return Err(error(
+                "Untrusted state parent directory",
+                "状态父目录不可信",
+            ));
+        }
+        let root = base.join("lovelaojicli");
+        if !existing_private_dir(&root)? {
+            return Ok(None);
+        }
+        let _lock = lock_readonly(&root.join("identity.lock"))?;
+        let mut bytes = Vec::new();
+        open(&root.join("identity.key"), false)?
+            .take(33)
+            .read_to_end(&mut bytes)?;
+        let key = bytes
+            .try_into()
+            .map_err(|_| error("Invalid identity key", "身份密钥无效"))?;
+        Ok(Some(Self { root, key }))
+    }
+    pub fn open() -> Result<Self> {
+        let base = Self::base()?;
         // XDG_STATE_HOME may legitimately be 0755; only our subtree must be private.
         if !base.exists() {
             private_dir(&base)?;
@@ -219,11 +279,15 @@ impl Store {
         private_dir(&path)?;
         Ok(path)
     }
+    pub fn workspace_path(&self, path: &Path) -> PathBuf {
+        self.root
+            .join("workspaces")
+            .join(fields(&self.key, [path.as_os_str().as_bytes()]))
+    }
     pub fn workspace(&self, path: &Path) -> Result<PathBuf> {
-        self.dir(&format!(
-            "workspaces/{}",
-            fields(&self.key, [path.as_os_str().as_bytes()])
-        ))
+        let dir = self.workspace_path(path);
+        private_dir(&dir)?;
+        Ok(dir)
     }
     pub fn read<T: DeserializeOwned>(&self, path: &Path) -> Result<Option<T>> {
         let mut f = match open(path, false) {

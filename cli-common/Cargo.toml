@@ -11,3 +11,7 @@ serde.workspace = true
 serde_json.workspace = true
 blake3.workspace = true
 rustix.workspace = true
+jiff = { workspace = true, optional = true }
+
+[features]
+local-time = ["dep:jiff"]

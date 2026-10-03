@@ -188,3 +188,6 @@ pub fn text_input(value: &str, max: usize) -> Option<String> {
     (!text.is_empty() && text.chars().count() <= max && !text.chars().any(char::is_control))
         .then(|| text.to_owned())
 }
+
+#[cfg(feature = "local-time")]
+pub mod local_time;
