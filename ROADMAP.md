@@ -1,8 +1,8 @@
 # 实施状态与后续路线图 / Implementation status and roadmap
 
 本文件统一记录**已实现、当前限制、待补验收、后续实现**，不是所有设想都已上线的功能清单。
-首批历史基线：`c10ce88` / `0.2.0`；本轮第二批交付后 workspace 版本为 `0.3.0`。后续交付应同步更新本文件。
-This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; current second-batch workspace version: `0.3.0`.
+首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.4.0`（第三批及 afk TUI）。后续交付应同步更新本文件。
+This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.4.0` (batch three and afk TUI).
 
 - 当前接口与行为：[README.md](README.md) 及各工具双语 README。
 - 开发约束：[AGENTS.md](AGENTS.md)；业务参数、依赖准入和版本同步以该文件为准。
@@ -13,8 +13,8 @@ Current contracts live in the root/per-tool READMEs; development rules live in A
 
 ## 1. 已交付 / Implemented
 
-十一个工具均在 workspace 和安装/卸载清单中，可独立使用；共用 locale 与基础 help/version/verison 契约。
-All eleven tools are workspace members and installer entries, independently usable with shared locale and basic CLI conventions.
+十四个工具均在 workspace 和安装/卸载清单中，可独立使用；共用 locale 与基础 help/version/verison 契约。
+All fourteen tools are workspace members and installer entries, independently usable with shared locale and basic CLI conventions.
 
 | 批次 / Batch | 工具 / Tool | 当前范围 / Current scope | 文档 / Docs |
 |---|---|---|---|
@@ -26,7 +26,10 @@ All eleven tools are workspace members and installer entries, independently usab
 | 第一批 4 / Batch 1.4 | `stuck` | 三次相同失败后要求一次假设；`--hypothesis` / Hypothesis gate after three identical failures | [中文](stuck/README-zh.md) · [English](stuck/README.md) |
 | 第二批 1 / Batch 2.1 | `duck` | 固定四问或显式回答，无持久化 / Four fixed questions or explicit answers; no persistence | [中文](duck/README-zh.md) · [English](duck/README.md) |
 | 第二批 2 / Batch 2.2 | `one` | 全局本地列表、稳定选择至 done、隔离管道 / Global local list, stable selection until done, isolated pipes | [中文](one/README-zh.md) · [English](one/README.md) |
-| 第二批 3 / Batch 2.3 | `afk` | 单调休息计时，所有终端纯文本降级 / Monotonic break timer; plain-text fallback on all terminals | [中文](afk/README-zh.md) · [English](afk/README.md) |
+| 第二批 3 / Batch 2.3 | `afk` | 单调计时、Ratatui 草地/按键提示、保守降级 / Monotonic timer, Ratatui grass/key notice, conservative fallback | [中文](afk/README-zh.md) · [English](afk/README.md) |
+| 第三批 1 / Batch 3.1 | `goodnight` | 只读时间、Git 与显式执行收尾摘要 / Read-only time, Git and execution summary | [中文](goodnight/README-zh.md) · [English](goodnight/README.md) |
+| 第三批 2 / Batch 3.2 | `proof` | 当日本地当前 HEAD / workspace 已有证据 / Today's local current-HEAD/workspace evidence | [中文](proof/README-zh.md) · [English](proof/README.md) |
+| 第三批 3 / Batch 3.3 | `poke` | 本地名单、精确去重、随机问候建议 / Local names, exact deduplication, random greeting suggestion | [中文](poke/README-zh.md) · [English](poke/README.md) |
 
 共享能力已落在 `cli-common/`，没有另建通用框架：
 Shared capabilities remain in `cli-common/`, without a separate framework:
@@ -39,8 +42,11 @@ Shared capabilities remain in `cli-common/`, without a separate framework:
 依赖已引入 clap/rand、serde/serde_json、blake3、rustix；安装器、Cargo.lock、根/工具文档和 AGENTS 状态已同步。原有四个工具的行为没有借首批交付重构。
 Dependencies and installation/documentation lists are synchronized. The original four tools retain their behavior.
 
-第二批仅复用既有依赖和共享能力；rustix 额外用于识别 one 的 stdin 文件类型，没有新增终端依赖。
-Batch two reuses existing dependencies and shared capabilities; rustix also identifies one stdin types. No terminal dependency was added.
+第二批初始交付仅复用既有依赖；rustix 用于识别 one 的 stdin 类型。当时 afk 纯文本降级；本轮经评估增加仅限 afk 的 Ratatui/signal-hook/libc，见 3.5 与工具 README。
+The initial second-batch delivery reused existing dependencies with plain-text afk. The current evaluated afk-only Ratatui/signal-hook/libc addition is documented in 3.5 and the tool README.
+
+第三批增加只读状态/执行记录读取与可选本地日历日能力；jiff 仅由 goodnight/proof 通过 `cli-common/local-time` 启用 std/tz-system/tzdb-zoneinfo，已评估并同步 AGENTS。其他工具单独构建不启用 jiff，没有内置时区数据库或新终端依赖。
+Batch three adds read-only state/run inspection and optional local calendar dates. Evaluated jiff features are enabled only by goodnight/proof through `cli-common/local-time`, with AGENTS synchronized. Other tools built separately do not enable jiff; no bundled timezone database or terminal dependency was added.
 
 ## 2. 当前限制与保守降级 / Current limits and conservative fallbacks
 
@@ -57,8 +63,11 @@ These are current boundaries, not promises that future features already exist.
 | Sprinkle 插入 / Insertion | 只考虑安全 EOF，固定 25% 选择、每文件最多一条、总计最多 100 条；不保证任意仓库可编译 / Conservative EOF-only comments, not a compilation guarantee |
 | Sprinkle 撤销 / Undo | 新提交、用户编辑、额外产物、身份/清单不确定时拒绝；未知中间态需人工检查；已完成清单作为已撤销记录保留 / Refuse uncertain deletion; some partial states need manual inspection; completed manifests remain as tombstones |
 | One 输入 / Input | 管道/文件读取等待 EOF，上限 1 MiB UTF-8、过滤后 1,000 项；不是完整 Markdown parser。持久化列表全局最多 1,000 项 / Bounded, EOF-terminated temporary input; one global persistent list |
-| Afk 终端 / Terminal | 本版所有终端均纯文本，不修改模式、不监听按键；ASCII 场景与按键提示暂缓 / Plain text everywhere, no mode changes or key capture; scenery/key notices deferred |
-| 状态与隐私 / State and privacy | 下一步/假设/任务为本地明文；摘要不是加密；锁只协调本工具；不保证网络盘或 WSL 挂载盘的权限/锁语义 / Plaintext user input and filesystem-dependent guarantees |
+| Afk 终端 / Terminal | 同一前台 TTY、非空/non-dumb TERM、至少 24×10 时启用单色 TUI；其他启动环境安静降级。SIGKILL/外部 SIGSTOP/abort/终端断连无法保证恢复 / Foreground suitable-terminal TUI; conservative startup fallback; uncatchable/aborting/disconnected paths cannot guarantee cleanup |
+| 只读报告 / Read-only reports | Git/时区/记录不可用时显示未知，已有共享锁争用不写状态；不是全部 shell 命令审计日志 / Unavailable sources remain unknown; existing shared locks never create state; not a complete shell audit |
+| Proof 统计 / Counting | 当前 HEAD 可达、本地配置姓名与 email 精确匹配、按 committer 时间；合并计提交但不计补丁，重命名前后分路径；浅历史/超预算为未知 / Exact author/current HEAD/committer-day scope; merge patches excluded, raw rename paths, shallow/budget failures unknown |
+| 本地日期 / Local dates | 系统时区或 TZ，依赖本机 zoneinfo；不假定每天 24 小时，时区缺失不默认 UTC / System zone or TZ; host zoneinfo required; calendar days, no silent UTC fallback |
+| 状态与隐私 / State and privacy | 下一步/假设/任务/姓名为本地明文；摘要不是加密；锁只协调本工具；不保证网络盘或 WSL 挂载盘的权限/锁语义 / Plaintext user input and filesystem-dependent guarantees |
 
 更完整的限制与故障行为见各工具 README；不能为了增加命中率或自动清理而降低安全检查。
 See per-tool READMEs for details. Do not weaken safety checks to improve hit rates or automate cleanup.
@@ -103,7 +112,7 @@ These are coverage gaps to close or verify, not assertions that each behavior is
 原建议先补首批加固；本轮按请求交付第二批，不将以上首批缺口标为完成。继续保留这些加固项；不在未完成工具上预建安装入口或占位二进制。
 First-batch hardening was the recommended prerequisite. This delivery implements the requested second batch without claiming those earlier gaps are closed. Keep them outstanding; do not pre-register unimplemented binaries.
 
-### 3.3 第二批本轮验证 / Current second-batch validation
+### 3.3 第二批交付验证 / Second-batch delivery validation
 
 在当前 Linux 环境，workspace `0.3.0` 执行通过：
 Passed in the current Linux environment, workspace `0.3.0`:
@@ -125,13 +134,69 @@ The initial run reported local Cargo incremental dep-graph cache warnings. Tests
 - [afk/tests/cli.rs](afk/tests/cli.rs) 及时长单元测试：严格边界、真实非 TTY 等待、快速钩子、locale/非 UTF-8 cwd。
 - [tests/batch_two_pty.py](tests/batch_two_pty.py)：duck 真实前台提问/取消；afk 普通/TERM=dumb、输入不延时、正常/参数错误/输出错误/Ctrl+C/SIGTERM/SIGHUP 后终端属性不变。
 
-**仍待验证**：macOS/WSL、第一批 3.2 节故障矩阵、one 磁盘满/同步失败注入。afk 未启用 raw mode，不宣称 raw mode 恢复矩阵已验证；场景/按键能力保留为后续工作。
-**Still pending:** macOS/WSL, the first-batch fault matrix in 3.2, and one disk-full/sync-failure injection. Afk never enables raw mode, so this is not a raw-mode recovery claim; scenery/key capture remain deferred.
+**当时待验证**：macOS/WSL、第一批 3.2 节故障矩阵、one 磁盘满/同步失败注入；当时 afk 场景/按键尚未实现。后续 TUI 实现与独立恢复验收见 3.5，不用原纯文本测试替代。
+**Pending at that delivery:** macOS/WSL, first-batch hardening and one disk-full/sync-failure injection; afk scenery/key capture were then deferred. Later TUI recovery validation is separately recorded in 3.5, not inferred from the old plain-text tests.
+
+### 3.4 第三批实现验证 / Third-batch implementation validation
+
+当前 Linux 环境、workspace `0.4.0` 执行通过：
+Passed in the current Linux environment, workspace `0.4.0`:
+
+- `cargo fmt --all -- --check`
+- `CARGO_INCREMENTAL=0 cargo test --workspace`：143 项 Rust 测试通过（原有 114 + 本轮 29，含时区单元测试） / 143 Rust tests, including timezone units。
+- `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo build --locked --workspace --release`
+- `bash -n install.sh`
+- `python3 -m unittest discover -s tests -p 'test_installer.py' -v`：14 项通过，安装/卸载清单包含全部 14 个二进制 / 14 passed, all 14 binaries covered。
+- `python3 tests/report_records_pty.py target/release`：真实前台 enough 执行/跳过、stuck 三次失败/第四次拦截后，proof 仅计 4 次真实执行、1 次成功；两种报告保持状态文件不变 / Real foreground execution/skip/gate acceptance; 4 actual runs, 1 success, no report state writes。
+
+新增验收入口 / New validation entry points:
+
+- [goodnight/tests/cli.rs](goodnight/tests/cli.rs)：非 Git/无 HOME、时区未知、dirty 摘要但索引/文件不写、工作树隔离、游离/unborn HEAD、同秒顺序/未来结果不猜测、只读旧记录、locale/非 UTF-8 cwd。
+- [proof/tests/cli.rs](proof/tests/cli.rs) 及 [统计单元测试](proof/src/history.rs)：精确作者、committer 日期、旧子提交不剪枝、HEAD 可达性、合并/根提交/二进制/重命名/去重、工作树隔离、浅历史未知、记录分类与损坏/未知 schema/锁/符号链接/密钥缺失、无外部 diff/textconv 执行。
+- [cli-common/src/local_time.rs](cli-common/src/local_time.rs)：23/25 小时 DST 日期、本地跨日、午夜跳跃、起点/终点/未来边界。
+- [poke/tests/cli.rs](poke/tests/cli.rs)：精确去重、空列表/不存在移除、容量、固定随机允许重复且不写历史、权限/锁/损坏/schema/符号链接/并发、locale/非 UTF-8 状态路径。
+- [tests/report_records_pty.py](tests/report_records_pty.py)：跨工具真实记录兼容与只读验收；不是仅靠模拟 JSON 宣称正确。
+
+仍保留：macOS/WSL、首批故障矩阵、完整磁盘满/sync 故障注入、Git 超时/全部扫描预算注入及全部历史时区异常。此时 afk 仍为纯文本；后续 TUI 验证见 3.5。没有将其他遗留矩阵勾为完成。
+Still pending: macOS/WSL, first-batch hardening, comprehensive disk-full/sync failures, Git timeout/all-budget injection and every historical timezone anomaly. Afk was still plain text at this point; later TUI validation is in 3.5. Other pending matrices are not silently marked complete.
+
+### 3.5 afk Ratatui 评估与本轮验证 / Afk Ratatui evaluation and current validation
+
+按本轮请求，解除 afk 的“暂不使用 Ratatui”限制，但不扩大时长参数或加入完整番茄钟。
+Ratatui 对单段动画偏重，采用它的收益是差分绘制、布局/裁剪与 TestBackend 测试；恢复仍由
+本工具自己实现，不把第三方初始化函数当作终端安全保证。
+The requested Ratatui addition supersedes afk's prior deferral, not the minimal business interface. It costs more than direct Crossterm but supplies rendering/layout and testability; terminal recovery remains our responsibility.
+
+- 仅 afk 使用 Ratatui 0.30.2（默认 features 关闭、crossterm_0_29）、signal-hook 原子信号标记与 libc 作业控制信号掩码；rustix 保存/恢复 termios。AGENTS/Cargo.lock 已同步，其他工具独立构建不引入这些 TUI 依赖。
+- Ratatui 声明最低 Rust 1.88；workspace 仍 1.89，已核查依赖元数据，但未实测 Rust 1.89 编译。新增解析 67 个 lockfile 条目，含不在当前平台编译的可选/平台依赖。
+- 不调用 Crossterm raw mode/event reader；使用保留 ISIG 的非规范/无回显输入。避开会查询光标并临时切换 raw mode 的 Terminal::clear；固定、有上限的视口在缩放时重建，不走可能执行 tput 的尺寸回退。
+- RAII + 常规循环处理 SIGINT/SIGTERM/SIGHUP/SIGQUIT；先恢复再重新触发信号。Ctrl+Z 先恢复再停止，fg 重查前台，bg 不读取或绘制；原单调截止时刻不变。
+
+本轮 Linux 检查通过 / Passed on Linux:
+
+- `cargo fmt --all -- --check`
+- `CARGO_INCREMENTAL=0 cargo test --workspace`：146 项 Rust 测试（原 143 + 场景 2 + 真 TUI PTY 入口 1）。
+- `CARGO_INCREMENTAL=0 cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo build --locked --workspace --release`
+- `bash -n install.sh`；14 项安装器测试 / 14 installer tests。
+- `python3 tests/report_records_pty.py target/release` 跨工具验收 / cross-tool acceptance。
+
+新增 [scene 单元测试](afk/src/scene.rs) 与 [真实 TUI PTY](tests/afk_tui_pty.py)，由 `cargo test -p afk` 调用。
+覆盖：正常完成、按键/粘贴洪泛不延时或泄漏给 shell、缩小/极大尺寸、中文、Ctrl+C 与四种终止信号、
+进入后错误/真实后端写错误/panic 展开、Ctrl+Z/fg/bg、挂起超过期限，以及 dumb/小终端/重定向降级。
+比较完整 termios，验证备用屏幕退出和光标显示，拒绝意外光标位置查询；未用假 TTY 开关绕过前台检查。
+New scene units and real controlling PTYs validate cleanup and timer behavior, including setup/write/panic faults and job control. No fake-interactivity hook bypasses foreground checks.
+
+新增隐藏钩子 `AFK_TEST_FAILURE=enter|draw|panic` 仅用于隔离 TUI 故障注入；既有 `AFK_FAST=1` 保持不变。
+macOS/WSL、真实终端模拟器目视验收与全部 I/O 故障时序仍待补；SIGKILL/外部 SIGSTOP/abort、
+硬件故障与不可写/消失终端不属于可靠清理保证，不宣称完成所有信号/平台矩阵。
+The failure hook is documented but absent from help. macOS/WSL, emulator visual checks and exhaustive I/O timing remain pending; uncatchable/aborting/disconnected paths are explicitly outside cleanup guarantees.
 
 ## 4. 第二批：本轮交付 / Batch two: delivered this round
 
-**已按 `duck → one → afk` 实现独立 crate、测试、文档和安装入口。afk 使用纯文本降级。**
-**Independent crates, tests, documentation and installer entries delivered in `duck → one → afk` order. Afk uses the plain-text fallback.**
+**已按 `duck → one → afk` 实现独立 crate、测试、文档和安装入口；afk 后续加入经评估的最小 TUI，保留降级。**
+**Independent crates, tests, docs and installer entries delivered in order; afk subsequently gained the evaluated minimal TUI with fallback retained.**
 
 ### 4.1 duck — 把问题说清楚 / Explain the problem
 
@@ -155,28 +220,58 @@ Persist one selected task until completion. Temporary input never opens or alter
 
 ### 4.3 afk — 不带惩罚的休息 / A break without penalties
 
-- 接口 / Interface：`afk <duration>`；ASCII 正整数加小写 `s/m/h`，不超过 24 小时；用法错误为 2。
-- 使用单调时钟安静等待，正常结束打印一行。Ctrl+C 使用默认前台信号取消，无完成行。
-- **本轮所有 TTY、非 TTY 和 TERM=dumb 均使用允许的纯文本降级**，不启用 raw mode、不捕捉键盘、不改变终端属性，无需在信号退出时恢复。正常终端行规程仍有效。
-- ASCII 生长场景及 `the grass noticed.` 按键提示**未实现**；终端生命周期/信号恢复需要另行设计验收，不以本轮无 raw mode 的测试替代。无新增终端依赖。
-- 隐藏钩子 `AFK_FAST=1` 将等待缩至 1%，已记入 README；不改变时长校验。
-- 无 Ratatui、`--until`、番茄钟循环、锁屏、桌面提醒、后台常驻或 streak。
+- 接口仍为 `afk <duration>`，正整数加小写 s/m/h、最多 24h；没有新业务参数。
+- 合适前台终端显示单色 ASCII 四阶段草地、太阳和剩余时间，最多 10 帧/秒、240×100 逻辑视口。普通按键显示 `the grass noticed.`（中文本地化）两秒；不计分、不延时、不重置。q/Esc 不作为退出键。
+- stdin/stdout/stderr 必须为同一前台 TTY、TERM 非空且非 dumb、启动尺寸至少 24×10；否则安静等待，不监听键盘、不改变终端模式。运行中缩小时显示紧凑文本。
+- Ctrl+C 或 SIGINT/SIGTERM/SIGHUP/SIGQUIT 恢复后取消，无完成行；Ctrl+Z 恢复后挂起，原截止时刻继续推进。fg 可重入，bg 不读取或绘图。仍在前台时退出/挂起前丢弃排队 TUI 输入，不回放给 shell。
+- 保留信号的 cbreak-style 输入、完整 termios 快照、独立非阻塞 tty 读写、已有信号恢复测试；对不可捕捉信号/abort/终端失联只保留明确限制，不虚称绝对恢复。
+- 正常结束恢复屏幕后打印一行；用法错误 2、I/O 错误 1。无状态、网络、外部辅助程序、桌面提醒、锁屏、后台常驻、--until、完整番茄钟或 streak。
+- 隐藏钩子 `AFK_FAST=1` 与 `AFK_TEST_FAILURE=enter|draw|panic` 见 README，不进入帮助。
 
-Monotonic quiet timer with the explicitly permitted plain-text fallback everywhere. No keyboard capture or terminal mutation. Scenery/key notices are deferred, not silently advertised as implemented. No desktop services, scoring or enforced breaks.
+A bounded monochrome Ratatui scene, nonpunitive key notice, monotonic deadline and tested terminal lifecycle, with conservative headless/dumb/small/background startup fallback. Details and non-guarantees are explicit in the tool READMEs.
 
-## 5. 第三批 / Batch three
+## 5. 第三批：本轮交付 / Batch three: delivered this round
 
-**均未实现，顺序为 `goodnight → proof → poke`，在第二批之后推进。**
-**Not implemented; follow batch two in this order.**
+**已按 `goodnight → proof → poke` 实现独立 crate、测试、双语文档和安装入口。**
+**Independent crates, tests, bilingual docs and installation delivered in `goodnight → proof → poke` order.**
 
-| 工具 / Tool | MVP 范围 / Planned scope | 交付前重点 / Key validation |
-|---|---|---|
-| `goodnight` | 只读展示本地时间、branch、工作区摘要及已记录执行状态，缺失写未知；可提示手动运行 later，不自动调用。非 Git 仍可输出时间/结束语 / Read-only session ending; missing evidence stays unknown | 不把任意命令成功称为测试通过；无锁 shell、杀进程、关机或作息评判 / No invented test status or enforcement |
-| `proof` | 仅当前仓库、当前 HEAD 可达的当天本地作者提交及当前 workspace 显式执行记录；无记录输出 `no recorded work.` / Current-repository evidence only | 本地时区/DST 日界线、作者配置缺失、按提交时间过滤；非 merge 增删行累加、路径去重、二进制不硬算行数；只计真实执行，不计跳过/拦截 / Explicit counting rules, no productivity scores |
-| `poke` | `poke add <name>`、`poke remove <name>`、`poke`；trim 后非空精确去重、均匀随机，可连续选同一人；空名单/删除不存在姓名友好处理 / Small local contact reminder | 状态/并发安全及未来 `POKE_SEED`；不读取通讯录、不保存联系历史/负债、不自动发消息 / No integrations or guilt metrics |
+### 5.1 goodnight — 只读收尾 / Read-only session ending
 
-需要本地日期/时区时再评估 `jiff`，不提前为所有工具引入；现行依赖白名单不会因本路线图自动放宽。
-Evaluate time-zone dependencies such as `jiff` only when needed. This roadmap does not itself authorize new dependencies.
+- 接口只有 `goodnight` 及基础 help/version；不读取 stdin。
+- 显示本地时间/UTC 偏移、branch/游离 HEAD、Git 未完成路径数、当前 workspace 最近显式命令状态；缺失/损坏/忙碌/同秒顺序不明时未知。
+- 任意命令成功不称“测试通过”；记录打印开始 Unix 时间戳，不假定今天运行过。
+- 有未完成路径时可提示手动运行 later，不自动调用。非 Git 仍可输出时间/结束语；无锁 shell、杀进程、关机或作息评判。
+
+Read-only time, Git and recorded command status, with unknowns preserved and no enforcement or invented test results.
+
+### 5.2 proof — 只展示已有证据 / Existing evidence only
+
+- 接口只有 `proof` 及基础 help/version；不读取 stdin，不扫其他仓库或 shell 活动。
+- 当前 HEAD 可达历史，精确匹配有效配置 `user.name` 和 `user.email`；按 committer 时间落入本地当天且不晚于采集时刻。不用时间剪枝遗漏日期乱序的祖先。
+- 提交数包含合并；增删行只累加非合并 numstat，含初始提交。路径按字节去重，关闭 rename 检测、旧新路径分别计；二进制只计路径。未提交变化不计入。
+- 缺失作者、浅历史、Git 错误/HEAD 变化/预算不足时整项未知。每探测 5 秒/32 MiB；历史最多 20,000、当天本人最多 1,000、路径最多 20,000、numstat 累计 32 MiB，探测间检查 10 秒采集预算。
+- 当前 worktree（非 Git 按 cwd）的 enough/stuck 显式完整真实执行按完成日期统计；成功不称测试通过。跳过/拦截、启动/等待失败、未完成/转发不完整、未来结果不计入。
+- 没有可用证据输出 `no recorded work.`（中文本地化），仍标明未知来源，不推断没工作。无分数、排名、跨仓库发现或终端活跃估计。
+
+Current-HEAD authored commits by local committer date plus current-workspace completed real executions by completion date; explicit statistics, unknowns and no productivity claims.
+
+### 5.3 poke — 一个轻量问候建议 / A small greeting suggestion
+
+- 接口为 `poke add <name>`、`poke remove <name>`、`poke`。
+- trim 后非空单行、最多 200 字符、无控制字符；最多 1,000 人。按原文精确去重，大小写/Unicode 表示不同则不同，不要求真实姓名。
+- 全局本地名单均匀随机，允许连续选到同一人；空名单、重复添加、移除不存在姓名友好成功。
+- `poke/names.json` 为本地明文，私有原子状态/校验/非阻塞锁；错误 fail closed，不重置。无联系历史、时间戳、负债，不读通讯录、不发送消息或接 API。
+- 隐藏测试钩子 `POKE_SEED=<u64>` 已实现并记入 README；无效值回退熵，不在帮助中显示。
+
+A private global name list and uniform random suggestion, with exact deduplication, benign empty/missing cases and no social integrations/history/debt.
+
+### 5.4 共享边界 / Shared boundaries
+
+- 只读报告不会创建目录、身份密钥、锁文件或记录，不修复/清理；已有共享锁争用或状态不可信时为未知。记录扫描最多 10,000 条/32 MiB，记录间检查 5 秒。
+- `jiff` 已完成本轮依赖评估，仅可选启用系统时区/zoneinfo；不提前给其他工具启用、不内置数据库。“今天”按日历日，DST 不固定 24h；时区不可用不回退 UTC。没有时钟测试环境变量，单元测试直接注入时间戳。
+- 成功或保守报告未知为 0；I/O/持久化错误为 1，用法错误为 2；默认 Ctrl+C，headless 不提问。目标仍为 Linux/macOS/WSL Unix，本轮执行证据只来自 Linux。
+
+Reports are genuinely read-only; optional calendar support is narrowly scoped. Errors, privacy and platform boundaries remain conservative.
 
 ## 6. 每个工具的交付清单 / Per-tool delivery checklist
 
@@ -194,7 +289,7 @@ Deliver one independently usable tool at a time, updating code, tests, installer
 - 项目改名或迁移 `crates/`、另建 `humanutils-core`、无实际需求的框架化重构。
 - 原生 Windows、桌面通知、shell hook、后台监控、远端同步、全局配置和插件系统。
 - Sprinkle 原地 branch、dirty override、force undo、clean、主题/密度/公开 seed、mixed 语言及任意语句间插入。
-- Later 历史卡片管理、编辑器恢复；One 复杂任务系统；Afk 完整番茄钟/TUI。
+- Later 历史卡片管理、编辑器恢复；One 复杂任务系统；Afk 完整番茄钟/多页面 TUI。
 - Proof 跨仓库自动发现、推测终端活跃时间、自动识别所有测试工具。
 
 No renaming/framework migration, platform expansion, background monitoring or expanded tool interfaces is implied. Throughout all batches: no diagnosis, productivity scores, streaks, punitive prompts, forced rest/sleep or automated social contact.

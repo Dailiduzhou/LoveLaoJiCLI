@@ -9,7 +9,7 @@ BIN_DIR="$INSTALL_DIR/bin"
 RECEIPT="$INSTALL_DIR/rc-files"
 BEGIN_MARKER='# >>> LoveLaoJiCLI PATH >>>'
 END_MARKER='# <<< LoveLaoJiCLI PATH <<<'
-TOOLS=(love happiness joy patience sprinkle later enough stuck duck one afk)
+TOOLS=(love happiness joy patience sprinkle later enough stuck duck one afk goodnight proof poke)
 RC_FILES=()
 TEMP_FILE=''
 trap 'if [[ -n "$TEMP_FILE" ]]; then rm -f -- "$TEMP_FILE"; fi' EXIT

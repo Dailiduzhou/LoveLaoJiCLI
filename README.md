@@ -7,8 +7,8 @@ See [ROADMAP.md](ROADMAP.md) for implementation status, limitations, outstanding
 
 ## 构建与运行 / Build and run
 
-需要 Rust 1.89+ 和 Cargo。首批与第二批工具支持 Linux、macOS、WSL Linux 用户空间；Git 功能需要本机 Git。
-Requires Rust 1.89+ and Cargo. First- and second-batch tools support Linux, macOS and WSL Linux; Git features require local Git.
+需要 Rust 1.89+ 和 Cargo。三批工具支持 Linux、macOS、WSL Linux 用户空间；Git 功能需要本机 Git。
+Requires Rust 1.89+ and Cargo. All three batches target Linux, macOS and WSL Linux; Git features require local Git.
 
 ```sh
 cargo build --workspace --release
@@ -25,7 +25,7 @@ cargo run -p joy
 cargo run -p patience -- sh -c 'echo hi'
 ```
 
-十一个工具各有独立目录：`love/`、`happiness/`、`joy/`、`patience/`、`sprinkle/`、`later/`、`enough/`、`stuck/`、`duck/`、`one/`、`afk/`，共用 `cli-common/`。
+十四个工具各有独立目录：`love/`、`happiness/`、`joy/`、`patience/`、`sprinkle/`、`later/`、`enough/`、`stuck/`、`duck/`、`one/`、`afk/`、`goodnight/`、`proof/`、`poke/`，共用 `cli-common/`。
 Each tool is independently usable; `cli-common/` shares CLI, locale, private state, Git snapshots and execution plumbing.
 
 ## 交互式安装与卸载 / Interactive installation
@@ -41,13 +41,13 @@ Run with Bash on Linux/macOS, without sudo. Installation requires Rust, Cargo an
 ```
 
 - 安装前需输入 `y` 确认；空输入或 EOF 取消，不更改配置。
-- 使用锁定依赖编译十一个工具的本机 release 版本，安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`。
+- 使用锁定依赖编译十四个工具的本机 release 版本，安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`。
 - 按 `$SHELL` 自动配置 PATH：Bash 使用 `.bashrc` 和生效的登录配置文件；Zsh 使用 `${ZDOTDIR:-$HOME}` 中的 `.zshrc`、`.zprofile`；Fish 使用 `${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/lovelaojicli.fish`。
 - PATH 配置带有项目专属标记，重复安装不会重复添加。安装目录优先于原有 PATH，其他位置的同名程序不会被覆盖。
-- 卸载不需要 Rust，按安装记录移除十一个工具及本项目 PATH 配置，保留其他配置、文件和源码构建产物。
+- 卸载不需要 Rust，按安装记录移除十四个工具及本项目 PATH 配置，保留其他配置、文件和源码构建产物。
 - 脚本提示按 locale 切换中英文。若设置了自定义 XDG 目录，卸载时请保持相同的 `XDG_DATA_HOME`。
 
-Installation asks for confirmation, builds all eleven release binaries and registers the user-local directory in your Bash/Zsh/Fish startup configuration. Reinstallation is idempotent. Uninstallation removes only managed binaries and PATH blocks; Rust is not required. Keep the same `XDG_DATA_HOME` when uninstalling.
+Installation asks for confirmation, builds all fourteen release binaries and registers the user-local directory in your Bash/Zsh/Fish startup configuration. Reinstallation is idempotent. Uninstallation removes only managed binaries and PATH blocks; Rust is not required. Keep the same `XDG_DATA_HOME` when uninstalling.
 
 **安装后打开新终端即可使用命令**，或执行脚本最后打印的 PATH 命令，立即在当前终端生效。脚本不能直接修改父终端环境，请勿 `source install.sh`。卸载后也请打开新终端刷新 PATH 和命令缓存。
 Open a new terminal after installation/uninstallation. To use the tools immediately, run the PATH command printed by the installer. Execute the installer; do not source it.
@@ -144,8 +144,8 @@ All first-batch tools are desktop-free, offline and local-only, with no telemetr
 状态根目录为 `${XDG_STATE_HOME:-$HOME/.local/state}/lovelaojicli/`。空/非绝对 XDG 路径回退到绝对 HOME；两者都不可用时不写 cwd 或 `/tmp`。受管理目录 0700、文件 0600；不跟随状态符号链接，不接受不可信权限。采用同目录原子替换、同步、非阻塞 OS 文件锁、版本化 JSON 与带密钥 BLAKE3 校验。锁只协调本工具，不能阻止编辑器或其他 Git 进程；权限/锁语义不可靠的网络盘或 WSL 挂载盘会拒绝记录或保守降级。
 State lives under the path above. Invalid XDG paths fall back to absolute HOME, never cwd or `/tmp`. Managed directories/files use 0700/0600, symlinks and unsafe permissions are rejected. Records use same-directory atomic replacement, sync, nonblocking OS locks, versioned JSON and keyed BLAKE3 checksums. Locks coordinate these tools only; filesystems without reliable permission/lock semantics are not promised equivalent safety.
 
-命令参数只保留按边界编码的本地带密钥摘要和程序 basename；不保存 argv 原文、完整 stdout/stderr 或环境变量。**下一步和假设是本地明文，勿填写密码、令牌或其他秘密**；命令行参数还可能进入 shell 历史或进程列表。仓库路径、文件名、Git 元数据和 sprinkle 补丁也可能敏感。密钥丢失/损坏会使旧记录失效，校验摘要不等于加密。
-Arguments are retained only as a keyed, boundary-preserving digest plus program basename, not raw argv, output bodies or environment. **Next actions and hypotheses are plaintext: never enter secrets.** CLI values can also appear in shell history/process lists. Paths, filenames, Git metadata and sprinkle patches can be sensitive. Lost/corrupt identity keys invalidate old records; hashing is not encryption.
+包装器命令参数只保留按边界编码的本地带密钥摘要和程序 basename；不保存 argv 原文、完整 stdout/stderr 或环境变量。**下一步和假设是本地明文，勿填写密码、令牌或其他秘密**；命令行参数还可能进入 shell 历史或进程列表。仓库路径、文件名、Git 元数据和 sprinkle 补丁也可能敏感。密钥丢失/损坏会使旧记录失效，校验摘要不等于加密。
+Wrapper arguments are retained only as a keyed, boundary-preserving digest plus program basename, not raw argv, output bodies or environment. **Next actions and hypotheses are plaintext: never enter secrets.** CLI values can also appear in shell history/process lists. Paths, filenames, Git metadata and sprinkle patches can be sensitive. Lost/corrupt identity keys invalidate old records; hashing is not encryption.
 
 真实执行记录和假设在相关调用时惰性清理超过 30 天的可识别、非活动记录；损坏/未知版本不盲删。latest 卡片保留到成功覆盖，活动 sprinkle 元数据不按时间删除。卸载仅删除程序和 PATH 配置，保留卡片、执行记录及 worktree。
 Recognized inactive runs/hypotheses older than 30 days are lazily pruned; unknown/corrupt records are left alone. Cards remain until successfully replaced; active sprinkle sessions never expire. Uninstallation preserves all user state and worktrees.
@@ -172,16 +172,46 @@ afk 5m                        # 安静休息；Ctrl+C 取消 / quiet break; Ctrl
   Four fixed answers in order, ending with `quack.`. Complete explicit arguments skip prompts; missing answers require a foreground terminal. Prompts use the controlling terminal, the complete summary uses stdout. Answers are trimmed, nonempty, single-line, at most 2,000 characters, without control characters. Missing interaction, EOF or invalid interactive input returns 125 with empty stdout; pipes are not answers. No persistence, AI, search or advice.
 - **one**：所有目录共用一个本地任务列表（最多 1,000 项，每项最多 2,000 字符，trim 后非空单行且无控制字符）。默认随机选中并保存 ID，添加任务不改变选中项；`done` 删除选中任务，下次 `one` 才重新选择。管道或文件重定向按行临时选择，过滤空行、ATX Markdown 标题、已勾选项，去除常见列表前缀；最多读取 1 MiB UTF-8、1,000 项，不是完整 Markdown parser。临时输入完全不访问状态；`add`/`done` 忽略 stdin，`/dev/null` 使用持久化列表。空列表成功；无选中项的 `done` 不会代选。状态损坏、版本未知或锁争用返回 1，不重置列表。
   One global local list (1,000 tasks maximum; each a trimmed, nonempty single line of up to 2,000 characters, no controls). Selection is persisted until `done` removes it; adding tasks does not change it. The next bare invocation selects again. Piped/redirected UTF-8 input is temporary (1 MiB / 1,000 tasks maximum), filtering blanks, ATX headings and checked items and stripping common list prefixes; not a full Markdown parser. Temporary input never opens state. `add`/`done` ignore stdin; `/dev/null` uses persistent tasks. Empty lists succeed; `done` without selection does not select one. Corruption, unknown schemas or lock contention fail closed with exit 1.
-- **afk**：接受正整数加 `s/m/h`，不超过 24h；单调时钟安静等待，结束仅输出一行。**本轮所有终端均采用路线图允许的纯文本降级**：不显示 ASCII 场景、不捕捉按键、不修改终端模式；因此没有 raw mode 恢复风险。Ctrl+C 使用默认信号取消，取消不输出完成行；键盘输入不延长时长，但仍由正常终端行规程处理。没有桌面提醒、后台服务或强制休息。
-  Positive integer plus `s/m/h`, at most 24h. Quiet monotonic wait, then one completion line. **This release uses the roadmap's plain-text fallback on every terminal**: no ASCII scenery, key capture or terminal-mode changes, so no raw-mode restoration risk. Ctrl+C cancels through default signal handling without a completion line. Input cannot extend the timer, but normal terminal line discipline still applies. No desktop notifications, daemon or enforced rest.
+- **afk**：正整数加 `s/m/h`，最多 24h；单调时钟计时。合适的同一前台终端显示 Ratatui 单色 ASCII 草地、剩余时间；普通按键提示 `the grass noticed.`（中文“小草注意到了。”），不惩罚、不重置或延长时长。Ctrl+C 取消；Ctrl+Z 先恢复终端再挂起，时间继续流逝，fg 可重入、bg 不读键盘。非 TTY、输出重定向、TERM 缺失/dumb、后台或启动时小于 24×10 则安静等待，结束仅一行。不使用 Crossterm raw mode，而是保留信号的无回显/非规范输入；RAII 恢复原始 termios、光标和备用屏幕。仅 afk 增加 Ratatui/signal-hook/libc 依赖；SIGKILL、外部 SIGSTOP、abort 或终端断连不可保证清理。详见工具 README 的评估与恢复边界。
+  Positive integer plus `s/m/h`, up to 24h, timed monotonically. A suitable shared foreground terminal gets a monochrome Ratatui ASCII garden and remaining time. Keys show `the grass noticed.` without penalties or timer changes. Ctrl+C cancels; Ctrl+Z restores before stopping, time keeps advancing, fg can resume and bg never reads keys. Non-TTY, redirected output, missing/dumb TERM, background startup or terminals smaller than 24×10 wait quietly and emit one completion line. Cbreak-style input retains signals, with exact termios and screen/cursor RAII restoration—not Crossterm raw mode. Ratatui/signal-hook/libc are scoped to afk. SIGKILL, external SIGSTOP, abort or terminal loss cannot guarantee cleanup; see the tool README for evaluation and boundaries.
 
 任务明文保存在状态根目录下 `one/tasks.json`，复用私有权限、原子写入、版本校验和非阻塞锁；完成即从列表删除，不保留完成历史，卸载保留状态。不要输入秘密；参数也可能进入 shell 历史/进程列表。duck/afk 不创建状态，不联网。第二批用法错误为 2，I/O/状态错误为 1，成功为 0；duck 无回答为 125。
 Tasks are local plaintext in `one/tasks.json` under the state root, with shared private permissions, atomic writes, version validation and nonblocking locks. Completion removes the task without history; uninstall preserves state. Do not enter secrets; CLI arguments can enter shell history/process lists. Duck/afk never create state; all three are offline. Usage errors return 2, I/O/state errors 1, success 0; duck without an answer returns 125.
 
-隐藏测试钩子（不在帮助中）：`ONE_SEED=<u64>` 固定同版本/候选顺序的随机选择，不影响任务 ID 或已有选中项；无效值忽略。`AFK_FAST=1` 将等待时长缩至 1%，不放宽时长校验。
-Hidden test hooks (not in help): `ONE_SEED=<u64>` fixes random selection for the same version/candidate order, not task IDs or existing selections; invalid values are ignored. `AFK_FAST=1` scales waits to 1% without relaxing duration validation.
+隐藏测试钩子（不在帮助中）：`ONE_SEED=<u64>` 固定同版本/候选顺序的随机选择，不影响任务 ID 或已有选中项；无效值忽略。`AFK_FAST=1` 将等待时长缩至 1%，不放宽时长校验；`AFK_TEST_FAILURE=enter|draw|panic` 仅在 TUI 模式注入初始化后失败/后端写错误/panic，未知值忽略，只用于隔离测试。
+Hidden test hooks (not in help): `ONE_SEED=<u64>` fixes random selection for the same version/candidate order, not task IDs or existing selections; invalid values are ignored. `AFK_FAST=1` scales waits to 1% without relaxing duration validation. `AFK_TEST_FAILURE=enter|draw|panic` injects post-entry/backend-write/panic failures in TUI mode only; unknown values are ignored, for isolated tests only.
 
 详解 / Deep dives: [duck](duck/README.md) · [中文](duck/README-zh.md)；[one](one/README.md) · [中文](one/README-zh.md)；[afk](afk/README.md) · [中文](afk/README-zh.md)。
+
+## 第三批工具 / Third batch
+
+```sh
+goodnight                     # 只读收尾，不强制休息 / read-only session ending
+proof                         # 今天可用的本地证据 / available local evidence today
+poke add "小明"
+poke                          # 只建议问候，不发消息 / suggests, never sends
+poke remove "小明"
+```
+
+- **goodnight**：显示本地时间（含 UTC 偏移）、当前 branch/游离 HEAD、Git 未完成路径数，以及当前工作区最近记录的命令状态。数据缺失、损坏、锁争用、并发时间顺序不明时显示未知；不是测试结果检查器。工作区有未完成路径时可提示手动运行 later，绝不自动调用，不保存卡片、不锁 shell、不关闭程序或强制作息。非 Git 仍有时间和结束语。
+  Local time with UTC offset, branch/detached HEAD, Git unfinished-path count and the latest explicitly recorded command in the current workspace. Missing/corrupt/busy or ambiguously ordered data stays unknown. It does not identify test results. Unfinished paths can prompt a manual later invocation, never an automatic call. No saved card, shell lock, shutdown or enforced schedule; non-Git still gets time and a closing line.
+- **proof**：仅遍历当前 HEAD 可达的本地提交，以当前有效 Git 配置 `user.name` **和** `user.email` 原文精确匹配作者，以 committer 时间落入本地“今天”且不晚于采集开始时刻为准。提交数含合并提交；增删行只累加非合并提交（含初始提交），路径按原始字节去重；关闭 rename 检测，重命名前后算不同路径；二进制仅计路径、不编造行数。不扫描其他分支或仓库。作者配置缺失、浅克隆、探测错误或预算不足时 Git 证据显示未知。
+  Only locally reachable history from current HEAD, matching **both** configured author name and email exactly. Commits are filtered by committer timestamp within today's local calendar boundaries, excluding future times. Commit count includes merges; line totals sum non-merge patches including root commits, with byte-exact path deduplication. Rename detection is off (old/new paths count separately); binaries contribute paths but no line counts. No scanning of other refs/repositories. Missing identity, shallow history, failed probes or budget exhaustion makes Git evidence unknown.
+- **执行证据 / Execution evidence**：goodnight/proof 只读 enough/stuck 已有显式记录。proof 按完成时间统计当天当前 worktree（非 Git 按 cwd）的完整真实执行；成功执行不称“测试通过”，跳过/拦截、启动失败、未完成、转发不完整及未来记录不计入。没有可用证据时显示 `no recorded work.`，同时保留未知来源说明；不推断没有工作，不打分。读取不会创建目录/密钥/锁文件，不修复、不清理；使用已有共享锁，争用则显示未知。
+  Both reports read existing enough/stuck records only. Proof counts today's complete real executions by completion time in this worktree (cwd outside Git). Successful executions are not called passed tests. Skips, gates, spawn failures, unfinished/incompletely forwarded runs and future records do not count. Without available evidence it says `no recorded work.`, retaining unknown-source labels—not a claim of no work or a score. Reads never create directories/keys/lock files, repair state or prune history; existing shared locks fail conservatively on contention.
+- **poke**：全局本地名单；姓名/昵称 trim 后为非空单行、最多 200 字符且无控制字符，最多 1,000 人。大小写与 Unicode 原文精确去重；空名单、重复添加、移除不存在姓名均友好成功。均匀随机选择，可连续选同一人；只输出行动建议，不记录选择/联系历史或负债，不读取系统通讯录、不接 API、不发消息。
+  Global local list: trimmed nonempty single-line names/nicknames, at most 200 characters without controls, up to 1,000 names. Exact case/Unicode deduplication; empty lists, duplicate adds and missing removes succeed kindly. Uniform random selection permits repeats. Suggestions only: no selection/contact history, reminder debt, address-book access, API or messaging.
+
+本地时间仅 goodnight/proof 使用可选 `jiff` 依赖（系统时区与 zoneinfo，无内置时区数据库）；遵从系统时区/`TZ`，缺失或无效时标未知，不偷偷回退 UTC。“今天”用日历日边界，不假定 DST 日期为 24 小时。Git 探测沿用每次 5 秒/32 MiB；proof 最多 20,000 条历史、1,000 条当天本人提交、20,000 个变更路径、32 MiB 累计 numstat，并在探测间检查 10 秒采集预算；状态扫描最多 10,000 条/32 MiB、探测间检查 5 秒。超预算不输出部分数字。
+Only goodnight/proof enable optional `jiff` (system timezone and zoneinfo, no bundled database). System timezone/`TZ` failures stay unknown, never silently UTC. Local days use calendar boundaries, not fixed 24-hour DST assumptions. Git probes retain 5-second/32-MiB limits; proof caps history at 20,000 commits, today's matching commits at 1,000, changed paths at 20,000 and cumulative numstat at 32 MiB, checking a 10-second collection budget between probes. Record scans cap at 10,000 entries/32 MiB with a 5-second inter-record budget. Budget failure suppresses that source's partial numbers.
+
+poke 明文名单保存在状态根目录的 `poke/names.json`，使用既有私有权限、原子写入、校验和非阻塞锁；损坏/未知版本/不安全权限/争用返回 1，不重置。不要输入秘密；卸载保留名单。隐藏测试钩子 `POKE_SEED=<u64>` 固定同版本和名单顺序的选择，无效值忽略，不显示于帮助。
+Poke stores plaintext names in `poke/names.json` under the state root, using existing private permissions, atomic writes, validation and nonblocking locks. Corruption/unknown schema/unsafe permissions/contention returns 1 without reset. Do not enter secrets; uninstall preserves the list. Hidden `POKE_SEED=<u64>` fixes choices for the same version/list order; invalid values are ignored, and the hook is absent from help.
+
+第三批不读取 stdin，适用于 headless；成功/保守报告未知返回 0，输出/写状态错误为 1，CLI 用法错误为 2；Ctrl+C 使用默认信号行为。
+Third-batch tools never read stdin and work headlessly. Success/conservative unknown reports return 0, output/state-write errors 1, usage errors 2; Ctrl+C uses default signal handling.
+
+详解 / Deep dives: [goodnight](goodnight/README.md) · [中文](goodnight/README-zh.md)；[proof](proof/README.md) · [中文](proof/README-zh.md)；[poke](poke/README.md) · [中文](poke/README-zh.md)。
 
 ## 语言 / Language
 
@@ -217,4 +247,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 # Installer tests (Python 3; isolated HOME and mock compiler)
 bash -n install.sh
 python3 -m unittest discover -s tests -p 'test_installer.py' -v
+
+# 跨工具真实执行/跳过/拦截验收 / Cross-tool real execution, skip and gate checks
+cargo build --locked --workspace --release
+python3 tests/report_records_pty.py target/release
 ```
