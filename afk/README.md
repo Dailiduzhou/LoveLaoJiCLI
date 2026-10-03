@@ -17,7 +17,7 @@ return 1. Ctrl+C cancels without a completion message (normally shell status 130
 
 ## Scene and fallback
 
-- A monochrome ASCII garden grows through four stages based only on elapsed
+- A colored ASCII garden grows through four stages based only on elapsed
   `Instant` time. A small sun animates, with remaining time and control hints.
   Room permitting, a figlet-style `remaining` banner at its native size tops a
   large matching clock whose equal-width cells keep colons and neighbors fixed
@@ -25,6 +25,9 @@ return 1. Ctrl+C cancels without a completion message (normally shell status 130
   scale squarely so slanted strokes stay 45°.
   A localized gentle or encouraging line rotates every
   eight seconds.
+  The banner is cyan, the clock bright cyan, grass green, sun/ground yellow,
+  and flowers pink with bright yellow centers. Only the basic 16-color palette
+  is used, with the terminal's default background; exact shades follow its theme.
   Rendering is capped at 10 frames/second and a 240×100 logical viewport.
 - Ordinary input shows `the grass noticed.` for two seconds. It never resets,
   extends or penalizes the break. `q`, Escape and arrow keys are not quit commands.
@@ -38,8 +41,9 @@ return 1. Ctrl+C cancels without a completion message (normally shell status 130
   there is a quiet wait, no key capture, no mode changes and one completion line.
   Redirecting stdout intentionally disables the TUI; output stays script-friendly.
   Shrinking an active scene shows compact text; oversized terminal dimensions are
-  clipped to the bounded viewport. `NO_COLOR` is respected by staying monochrome;
-  it does not disable screen/cursor escape sequences in TUI mode.
+  clipped to the bounded viewport. A nonempty `NO_COLOR` (e.g. `NO_COLOR=1 afk 5m`)
+  keeps the same artwork monochrome; unset or empty enables colors. It does not
+  disable screen/cursor escape sequences in TUI mode. Colors are reset on cleanup.
 
 No state, network, external helper program, desktop notification, lockscreen,
 background daemon, streak, scoring, `--until` or Pomodoro loop.
@@ -67,8 +71,8 @@ and lifecycle code in `afk/`, with no new shared TUI framework.
 
 ## Terminal lifecycle
 
-`src/tui.rs` owns a separate `/dev/tty` descriptor, the exact original termios and
-an RAII guard. It uses noncanonical/no-echo input with `ISIG` retained, **not**
+`src/tui/terminal.rs` owns a separate `/dev/tty` descriptor, the exact original
+termios and an RAII guard; `src/tui.rs` controls their lifetime. It uses noncanonical/no-echo input with `ISIG` retained, **not**
 Crossterm raw mode. Flow-control keys are treated as input while the scene is live.
 Separately opened nonblocking input/output descriptors do not change the shell's
 inherited file flags. Keyboard bytes/paste queued during the scene are discarded
@@ -108,7 +112,8 @@ Hidden environment-only test hooks (never in help):
   values are ignored. For isolated tests, not normal use.
 
 `cargo test -p afk` includes TestBackend snapshots and Python-backed real PTYs:
-completion, key floods, no deadline extension or queued-input leakage, resize,
+color/monochrome rendering and cleanup, completion, key floods, no deadline
+extension or queued-input leakage, resize,
 Chinese output, Ctrl+C/SIGINT/SIGTERM/SIGHUP/SIGQUIT, setup/write/panic failures,
 Ctrl+Z/fg/bg, suspension past the deadline, dumb/small/redirected fallback and exact
 termios restoration. Tests also reject accidental cursor-position queries.

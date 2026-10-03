@@ -1,6 +1,11 @@
+mod palette;
+pub(crate) use palette::Palette;
+
 use cli_common::Language;
 use ratatui::{
     layout::{Alignment, Constraint, Flex, Layout, Margin, Rect},
+    style::Style,
+    text::{Line, Span},
     widgets::{Paragraph, Wrap},
     Frame,
 };
@@ -169,8 +174,8 @@ fn scale_glyph(lines: &[&str], s: u16) -> Vec<String> {
         .map(|row| row.into_iter().collect())
         .collect()
 }
-fn art(frame: &mut Frame, lines: Vec<String>, area: Rect) {
-    let w = width(&lines).min(area.width);
+fn art(frame: &mut Frame, lines: Vec<Line<'static>>, area: Rect) {
+    let w = (lines.iter().map(Line::width).max().unwrap_or(0) as u16).min(area.width);
     let h = (lines.len() as u16).min(area.height);
     let rect = Rect::new(
         area.x + (area.width - w) / 2,
@@ -178,31 +183,38 @@ fn art(frame: &mut Frame, lines: Vec<String>, area: Rect) {
         w,
         h,
     );
-    frame.render_widget(Paragraph::new(lines.join("\n")), rect);
+    frame.render_widget(Paragraph::new(lines), rect);
 }
 // Fixed equal-width cells: every character occupies SLOT*s columns plus one
 // s-wide gap, and the strip centers as a whole, so a changing digit or colon
 // never moves its neighbors. Glyphs scale squarely to keep 45° slants intact.
-fn clock_art(frame: &mut Frame, area: Rect, time: &str, s: u16) {
+fn clock_art(frame: &mut Frame, area: Rect, time: &str, s: u16, style: Style) {
     let slots = vec![Constraint::Length(SLOT as u16 * s); time.len()];
     let cells = Layout::horizontal(slots)
         .spacing(s)
         .flex(Flex::Center)
         .split(area);
     for (byte, cell) in time.bytes().zip(cells.iter()) {
-        art(frame, scale_glyph(glyph(byte), s), *cell);
+        art(
+            frame,
+            scale_glyph(glyph(byte), s)
+                .into_iter()
+                .map(|line| Line::styled(line, style))
+                .collect(),
+            *cell,
+        );
     }
 }
-fn garden(w: u16, h: u16, stage: usize, elapsed: Duration) -> Vec<String> {
+fn garden(w: u16, h: u16, stage: usize, elapsed: Duration, palette: Palette) -> Vec<Line<'static>> {
     let (w, h) = (usize::from(w), usize::from(h));
     if w == 0 || h == 0 {
         return vec![];
     }
-    let mut canvas = vec![vec![' '; w]; h];
-    let mut put = |x: usize, y: usize, text: &str| {
+    let mut canvas = vec![vec![(' ', Style::default()); w]; h];
+    let mut put = |x: usize, y: usize, text: &str, style: Style| {
         if let Some(row) = canvas.get_mut(y) {
             for (cell, c) in row.iter_mut().skip(x).zip(text.chars()) {
-                *cell = c;
+                *cell = (c, style);
             }
         }
     };
@@ -213,38 +225,55 @@ fn garden(w: u16, h: u16, stage: usize, elapsed: Duration) -> Vec<String> {
             [r"  \ | /  ", r"  .---.  ", r" (     ) ", r"--'---'--"]
         };
         for (y, row) in sun.iter().enumerate() {
-            put(w * 3 / 4 - 4, y, row);
+            put(w * 3 / 4 - 4, y, row, palette.sun);
         }
         4
     } else {
         0
     };
     let ground = h - 1;
-    put(0, ground, &"_".repeat(w));
+    put(0, ground, &"_".repeat(w), palette.ground);
     let count = (w / 14).clamp(1, 9);
     for n in 0..count {
         let x = (n + 1) * w / (count + 1);
         if stage == 0 {
-            put(x, ground.saturating_sub(1), ".");
+            put(x, ground.saturating_sub(1), ".", palette.grass);
             continue;
         }
         let max_stem = ground.saturating_sub(sky + 1).clamp(1, 16);
         let stem = (max_stem * stage / 3).max(1).min(ground);
         let top = ground - stem;
         for y in top..ground {
-            put(x, y, "|");
+            put(x, y, "|", palette.grass);
         }
         if stage >= 2 && w >= 7 && stem >= 2 {
             let leaf = ground - (stem / 2).max(1);
-            put(x.saturating_sub(2), leaf, r"\ | /");
+            put(x.saturating_sub(2), leaf, r"\ | /", palette.grass);
         }
         if stage == 3 && w >= 7 && stem >= 3 {
-            put(x.saturating_sub(2), top, "(_*_)");
+            put(x.saturating_sub(2), top, "(_*_)", palette.flower);
+            put(x, top, "*", palette.center);
         }
     }
+    // Group adjacent cells by style, avoiding a separate allocation per character.
     canvas
         .into_iter()
-        .map(|row| row.into_iter().collect())
+        .map(|row| {
+            let mut spans = Vec::new();
+            let mut text = String::new();
+            let mut style = Style::default();
+            for (c, next) in row {
+                if next != style && !text.is_empty() {
+                    spans.push(Span::styled(std::mem::take(&mut text), style));
+                }
+                style = next;
+                text.push(c);
+            }
+            if !text.is_empty() {
+                spans.push(Span::styled(text, style));
+            }
+            Line::from(spans)
+        })
         .collect()
 }
 
@@ -254,6 +283,7 @@ pub fn draw(
     wait: Duration,
     noticed: bool,
     language: Language,
+    palette: Palette,
 ) {
     let left = wait.saturating_sub(elapsed);
     let seconds = left.as_secs() + u64::from(left.subsec_nanos() != 0);
@@ -296,26 +326,39 @@ pub fn draw(
     ])
     .areas(main);
     if large {
-        art(frame, REMAINING.map(String::from).to_vec(), title);
+        art(
+            frame,
+            REMAINING
+                .map(|line| Line::styled(line, palette.title))
+                .to_vec(),
+            title,
+        );
     } else {
         let caption = if title.width >= 34 {
             language.text("afk - a small patch of grass", "afk - 一小片草地")
         } else {
             language.text("afk - take a breath", "afk - 歇一会儿")
         };
-        frame.render_widget(Paragraph::new(caption).alignment(Alignment::Center), title);
+        frame.render_widget(
+            Paragraph::new(caption)
+                .style(palette.title)
+                .alignment(Alignment::Center),
+            title,
+        );
     }
     if big_clock {
-        clock_art(frame, clock, &time, fit.min(4));
+        clock_art(frame, clock, &time, fit.min(4), palette.clock);
     }
     frame.render_widget(
-        Paragraph::new(remaining).alignment(Alignment::Center),
+        Paragraph::new(remaining)
+            .style(palette.clock)
+            .alignment(Alignment::Center),
         caption,
     );
     let stage = (elapsed.as_nanos().saturating_mul(4) / wait.as_nanos().max(1)).min(3) as usize;
     art(
         frame,
-        garden(field.width, field.height, stage, elapsed),
+        garden(field.width, field.height, stage, elapsed, palette),
         field,
     );
     frame.render_widget(
@@ -349,6 +392,16 @@ mod tests {
     use super::*;
     use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
     fn render(w: u16, h: u16, seconds: u64, noticed: bool, language: Language) -> Buffer {
+        render_with_palette(w, h, seconds, noticed, language, Palette::new(true))
+    }
+    fn render_with_palette(
+        w: u16,
+        h: u16,
+        seconds: u64,
+        noticed: bool,
+        language: Language,
+        palette: Palette,
+    ) -> Buffer {
         let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
         terminal
             .draw(|frame| {
@@ -358,6 +411,7 @@ mod tests {
                     Duration::from_secs(100),
                     noticed,
                     language,
+                    palette,
                 )
             })
             .unwrap();
@@ -366,6 +420,51 @@ mod tests {
     fn text(buffer: &Buffer) -> String {
         buffer.content.iter().map(|cell| cell.symbol()).collect()
     }
+    #[test]
+    fn artwork_uses_distinct_colors_without_setting_a_background() {
+        use ratatui::style::Color;
+        let buffer = render(120, 70, 80, false, Language::English);
+        for color in [
+            Color::Cyan,
+            Color::LightCyan,
+            Color::Green,
+            Color::Yellow,
+            Color::LightMagenta,
+            Color::LightYellow,
+        ] {
+            assert!(buffer
+                .content
+                .iter()
+                .any(|cell| cell.fg == color && cell.symbol() != " "));
+        }
+        assert!(buffer.content.iter().all(|cell| cell.bg == Color::Reset));
+        let flower = buffer
+            .content
+            .iter()
+            .find(|cell| cell.symbol() == "*")
+            .unwrap();
+        assert_eq!(flower.fg, Color::LightYellow);
+    }
+
+    #[test]
+    fn monochrome_preserves_every_character_and_layout() {
+        use ratatui::style::Color;
+        for (w, h) in [(12, 3), (24, 10), (80, 24), (120, 70)] {
+            for seconds in [0, 30, 60, 80] {
+                for language in [Language::English, Language::Chinese] {
+                    let colored = render(w, h, seconds, true, language);
+                    let plain =
+                        render_with_palette(w, h, seconds, true, language, Palette::new(false));
+                    assert_eq!(text(&colored), text(&plain));
+                    assert!(plain
+                        .content
+                        .iter()
+                        .all(|cell| cell.fg == Color::Reset && cell.bg == Color::Reset));
+                }
+            }
+        }
+    }
+
     #[test]
     fn grows_by_elapsed_time_without_key_penalties() {
         let start = text(&render(100, 40, 0, false, Language::English));
