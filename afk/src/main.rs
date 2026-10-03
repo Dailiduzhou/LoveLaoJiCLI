@@ -1,6 +1,8 @@
+mod scene;
+mod tui;
 use cli_common::{command, display, Language, Result};
 use std::io::{self, Write};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 fn duration(s: &str) -> std::result::Result<Duration, String> {
     let invalid = || "Expected a positive integer followed by s/m/h, at most 24h".to_owned();
@@ -23,18 +25,27 @@ fn duration(s: &str) -> std::result::Result<Duration, String> {
     Ok(Duration::from_secs(seconds))
 }
 fn main() {
-    if let Err(e) = run() {
-        eprintln!("afk: {}", display(e.to_string()));
-        std::process::exit(1);
+    match run() {
+        Ok(Some(signal)) => {
+            // All terminal guards have already run. Preserve signal termination
+            // rather than presenting a cancelled break as a normal completion.
+            let _ = signal_hook::low_level::emulate_default_handler(signal);
+            std::process::exit(128 + signal);
+        }
+        Ok(None) => (),
+        Err(e) => {
+            let _ = writeln!(io::stderr().lock(), "afk: {}", display(e.to_string()));
+            std::process::exit(1);
+        }
     }
 }
-fn run() -> Result<()> {
+fn run() -> Result<Option<i32>> {
     let l = Language::detect();
     let matches = command(
         "afk",
         l.text(
-            "Take a quiet break. Ctrl+C cancels; terminal settings are never changed.",
-            "安静休息一会儿。Ctrl+C 可取消；不更改终端设置。",
+            "Take a break with a small grass scene; quiet fallback without a suitable terminal.",
+            "看一小片草地，休息一会儿；无合适终端时安静等待。",
         ),
     )
     .arg(
@@ -51,21 +62,15 @@ fn run() -> Result<()> {
     if std::env::var("AFK_FAST").as_deref() == Ok("1") {
         wait /= 100;
     }
-    // Deliberate plain-text fallback in ALL environments: no raw mode, keyboard
-    // reader, signal handler, alternate screen or cursor state to restore.
-    // Default foreground signal handling remains intact, including Ctrl+C.
-    let start = Instant::now();
-    while let Some(remaining) = wait.checked_sub(start.elapsed()) {
-        if remaining.is_zero() {
-            break;
-        }
-        std::thread::sleep(remaining);
+    if let Some(signal) = tui::run(wait, l)? {
+        return Ok(Some(signal));
     }
     writeln!(
         io::stdout().lock(),
         "{}",
         l.text("Break complete.", "休息结束。")
-    )
+    )?;
+    Ok(None)
 }
 #[cfg(test)]
 mod tests {

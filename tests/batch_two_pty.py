@@ -95,8 +95,8 @@ with tempfile.TemporaryDirectory(prefix="batch-two-pty-") as temp:
         assert out == expected and prompts == b""
         assert not (root / "state").exists()
     elif tool == "afk":
-        # Pure text fallback even with a real foreground terminal. Input does not
-        # extend the deadline; there is no key reader or raw-mode restoration gap.
+        # stdout is redirected, so afk must use plain text even when stdin and
+        # stderr are foreground terminals. Real TUI coverage is in afk_tui_pty.py.
         for term in ["xterm", "dumb"]:
             out, _, elapsed = run(["100s"], cancel="keys", term=term)
             assert out == b"Break complete.\n"

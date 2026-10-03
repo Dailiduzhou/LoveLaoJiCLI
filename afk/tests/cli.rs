@@ -8,7 +8,9 @@ const BIN: &str = env!("CARGO_BIN_EXE_afk");
 fn cli_basics() {
     basics(BIN, "afk");
     let f = Fixture::new(BIN, false);
-    assert!(!text(&f.run(&["--help"]).stdout).contains("AFK_FAST"));
+    let help = text(&f.run(&["--help"]).stdout);
+    assert!(!help.contains("AFK_FAST"));
+    assert!(!help.contains("AFK_TEST_FAILURE"));
     code(&f.run(&[]), 2);
     for s in ["0s", "25h", "2.5m", "tomorrow", "18446744073709551615h"] {
         code(&f.run(&[s]), 2);
@@ -48,13 +50,26 @@ fn fast_hook_and_localized_completion() {
     assert!(o.stderr.is_empty());
 }
 #[test]
-fn terminal_settings_unchanged_on_completion_error_and_signals() {
+fn fallback_terminal_settings_unchanged_on_completion_error_and_signals() {
     let status = std::process::Command::new("python3")
         .arg(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../tests/batch_two_pty.py"
         ))
         .args([BIN, "afk"])
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+
+#[test]
+fn real_tui_lifecycle_and_job_control() {
+    let status = std::process::Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../tests/afk_tui_pty.py"
+        ))
+        .arg(BIN)
         .status()
         .unwrap();
     assert!(status.success());

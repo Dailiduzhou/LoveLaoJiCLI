@@ -1,49 +1,117 @@
 # afk
 
-A quiet break without penalties.
+A break without penalties, with a small Ratatui grass scene when a suitable
+foreground terminal is available.
 
 ```sh
 afk 5m
-afk 15m
 afk 30s
 afk 1h
 ```
 
-Duration must be ASCII decimal digits followed by lowercase `s`, `m` or `h`,
-positive and no more than 24 hours (86,400 seconds). Leading zeros are accepted;
-signs, fractions, spaces, missing units, zero and overflow are rejected with exit
-2. A duration is required; no `--until`, loops or extra business flags.
+Duration remains ASCII decimal digits followed by lowercase `s`, `m` or `h`,
+positive and at most 24h. Leading zeros are accepted; signs, fractions, spaces,
+missing units, zero and overflow return 2. No new business flags or subcommands.
+Normal completion prints `Break complete.` after leaving the scene; I/O failures
+return 1. Ctrl+C cancels without a completion message (normally shell status 130).
 
-Timing uses `Instant`, not wall-clock time. The tool waits quietly, then prints
-`Break complete.` to stdout. I/O errors return 1; normal completion returns 0.
+## Scene and fallback
 
-## Deliberate terminal fallback
+- A monochrome ASCII garden grows through four stages based only on elapsed
+  `Instant` time. A small sun animates, with remaining time and control hints.
+  Room permitting, a figlet-style `remaining` banner at its native size tops a
+  large matching clock whose equal-width cells keep colons and neighbors fixed
+  while digits change, with narrow glyphs centered inside their cells; glyphs
+  scale squarely so slanted strokes stay 45°.
+  A localized gentle or encouraging line rotates every
+  eight seconds.
+  Rendering is capped at 10 frames/second and a 240×100 logical viewport.
+- Ordinary input shows `the grass noticed.` for two seconds. It never resets,
+  extends or penalizes the break. `q`, Escape and arrow keys are not quit commands.
+  Only this terminal is read; no global idle/keyboard monitoring. At most 256
+  input bytes are read per frame, so a key/paste flood cannot starve the timer.
+- Ctrl+C cancels. Ctrl+Z restores the terminal **before** stopping. Time continues
+  during process suspension. `fg` can resume the scene; `bg` does not capture keys
+  or draw. If the deadline passed while stopped, continuing finishes immediately.
+- The scene requires stdin/stdout/stderr to refer to the same foreground terminal,
+  a nonempty `TERM` other than `dumb`, and at least 24×10 cells at startup. Otherwise
+  there is a quiet wait, no key capture, no mode changes and one completion line.
+  Redirecting stdout intentionally disables the TUI; output stays script-friendly.
+  Shrinking an active scene shows compact text; oversized terminal dimensions are
+  clipped to the bounded viewport. `NO_COLOR` is respected by staying monochrome;
+  it does not disable screen/cursor escape sequences in TUI mode.
 
-**This version uses the roadmap's plain-text fallback on every terminal**, not
-just non-TTY or `TERM=dumb`. ASCII growth and `the grass noticed.` key notices
-are deferred. No terminal dependency has been added: safely managing raw mode
-across errors, suspend/resume and signals would require a separate lifecycle
-implementation and validation.
+No state, network, external helper program, desktop notification, lockscreen,
+background daemon, streak, scoring, `--until` or Pomodoro loop.
 
-There is no raw mode, keyboard reader, alternate screen, cursor manipulation or
-signal handler. Terminal attributes are never changed, so nothing needs restoring
-on normal completion, output failure, Ctrl+C, SIGTERM or SIGHUP. Ctrl+C uses the
-normal foreground terminal signal and cancels without a completion message
-(typically exit 130 in the invoking shell). No keys are consumed, no penalties are
-issued and input cannot reset or extend the timer. Normal terminal line discipline
-still applies: input may echo, queue for the shell, suspend the process or pause
-terminal output. This is not an input filter or enforced rest.
+## Why Ratatui, and its cost
 
-No state is saved, no network/desktop services are called. No lockscreen, daemon,
-notifications, streaks or productivity scoring. Linux/macOS/WSL Unix are targets;
-this delivery was tested on Linux, with PTY checks for unchanged terminal settings
-on completion, argument/output errors and cancellation/signals. macOS/WSL remain
-pending; no raw-mode restoration claim is made because raw mode is not used.
+Crossterm alone would be sufficient for this one animation and would be lighter.
+Ratatui is useful for buffer-diff rendering, clipping/layout and `TestBackend`
+scene tests, particularly if the scene evolves. It is **not** a terminal recovery
+framework. This implementation accepts the dependency cost but keeps all scene
+and lifecycle code in `afk/`, with no new shared TUI framework.
 
-Supports `--help`, `--version`, `--verison`. Messages use the first nonempty
-`LC_ALL` → `LC_MESSAGES` → `LANG` (zh-CN/zh_CN/zh: Chinese; otherwise English).
+- Ratatui 0.30.2: defaults disabled, only `crossterm_0_29` selected. Its declared
+  Rust minimum is 1.88; the workspace still declares 1.89. The dependency metadata
+  was checked, but this delivery did not execute tests under Rust 1.89 itself.
+- Crossterm is used through Ratatui's re-export as a rendering backend. Its event
+  dependencies are still transitively compiled; our code does not call its event
+  reader or global raw-mode API. No async runtime, event thread or mouse capture.
+- Existing rustix owns the termios snapshot/restore. `signal-hook` supplies atomic
+  signal flags; narrowly scoped libc calls temporarily mask Unix job-control I/O
+  signals on the UI thread, avoiding suspension halfway through restoration.
+- The initial dependency resolution added 67 lockfile entries (including optional
+  and target-specific packages, not all compiled on Linux). The local release
+  binary grew from about 1.06 MiB to about 1.45 MiB; not a universal size guarantee.
 
-Hidden test hook: exactly `AFK_FAST=1` scales the wait to 1% after normal duration
-validation; other values are ignored. Not shown in help.
+## Terminal lifecycle
 
-Tests: `cargo test -p afk` (Python 3 required for PTY tests).
+`src/tui.rs` owns a separate `/dev/tty` descriptor, the exact original termios and
+an RAII guard. It uses noncanonical/no-echo input with `ISIG` retained, **not**
+Crossterm raw mode. Flow-control keys are treated as input while the scene is live.
+Separately opened nonblocking input/output descriptors do not change the shell's
+inherited file flags. Keyboard bytes/paste queued during the scene are discarded
+before returning/suspending while still in the foreground, not replayed to the shell.
+
+While the UI owns the terminal, signal handlers only update atomics. The event loop handles SIGINT/SIGTERM/SIGHUP/
+SIGQUIT by restoring termios, showing the cursor and leaving the alternate screen,
+then re-raising the signal with default behavior. SIGTSTP restores first, then stops;
+continuation rechecks foreground ownership and snapshots settings again on reentry.
+Errors and ordinary panic unwinding also run the guard. Cleanup attempts termios,
+color, cursor and screen operations even when an earlier operation fails. Writes
+are nonblocking so output backpressure fails instead of freezing with cbreak live.
+
+One evaluated upstream pitfall: Ratatui 0.30 `Terminal::clear()` asks for cursor
+position, and Crossterm temporarily enters raw mode while waiting for that reply.
+We avoid that API, using backend clear and a fixed viewport. On resize the bounded
+terminal buffer is rebuilt instead of using backend size fallbacks (which can run
+`tput`). This avoids cursor-response input consumption and external helper calls.
+
+**Limits:** cleanup cannot run after SIGKILL, an externally delivered SIGSTOP,
+process abort, hardware failure or a non-unwinding crash. Only the listed signals
+have managed cleanup. A disconnected/unwritable terminal may reject restoration
+or screen/cursor escape sequences; cleanup is best-effort in that case, not a
+promise to repair a terminal that no longer exists. Unexpected terminal ownership
+changes are detected between frames, not an atomic lease against other programs.
+
+## Language, hooks and tests
+
+Supports `--help`, `--version`, `--verison`; English/Chinese follows the first
+nonempty `LC_ALL` → `LC_MESSAGES` → `LANG`. No secrets or answers are requested.
+
+Hidden environment-only test hooks (never in help):
+
+- `AFK_FAST=1`: wait for 1% of the validated duration; other values ignored.
+- `AFK_TEST_FAILURE=enter|draw|panic`: fail after terminal entry, inject a backend
+  write error, or panic after a rendered frame. Only applies to TUI mode; unknown
+  values are ignored. For isolated tests, not normal use.
+
+`cargo test -p afk` includes TestBackend snapshots and Python-backed real PTYs:
+completion, key floods, no deadline extension or queued-input leakage, resize,
+Chinese output, Ctrl+C/SIGINT/SIGTERM/SIGHUP/SIGQUIT, setup/write/panic failures,
+Ctrl+Z/fg/bg, suspension past the deadline, dumb/small/redirected fallback and exact
+termios restoration. Tests also reject accidental cursor-position queries.
+
+Linux validated. macOS/WSL, native terminal-emulator visual checks and every I/O
+failure timing remain pending; no native Windows promise.
