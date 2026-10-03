@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli-common", "love", "happiness", "joy", "patience", "sprinkle", "later", "enough", "stuck", "duck", "one", "afk", "goodnight", "proof"]
+members = ["cli-common", "love", "happiness", "joy", "patience", "sprinkle", "later", "enough", "stuck", "duck", "one", "afk", "goodnight", "proof", "poke"]
 resolver = "2"
 
 [workspace.package]

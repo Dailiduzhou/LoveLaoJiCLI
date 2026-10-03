@@ -1,0 +1,15 @@
+[package]
+name = "poke"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+cli-common.workspace = true
+clap.workspace = true
+serde.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
