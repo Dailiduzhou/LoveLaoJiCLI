@@ -3,7 +3,7 @@ members = ["cli-common", "love", "happiness", "joy", "patience", "sprinkle", "la
 resolver = "2"
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 rust-version = "1.89"
 
@@ -15,3 +15,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 blake3 = "1"
 rustix = { version = "1", features = ["process", "termios", "fs"] }
+jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo"] }
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm_0_29"] }
+signal-hook = { version = "0.3.18", default-features = false }
+libc = "0.2"
