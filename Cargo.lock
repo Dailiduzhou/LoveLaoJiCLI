@@ -424,6 +424,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "goodnight"
+version = "0.4.0"
+dependencies = [
+ "cli-common",
+ "serde_json",
+]
+
+[[package]]
 name = "happiness"
 version = "0.4.0"
 dependencies = [

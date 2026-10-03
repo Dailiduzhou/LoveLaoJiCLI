@@ -1,0 +1,12 @@
+[package]
+name = "goodnight"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+cli-common = { workspace = true, features = ["local-time"] }
+
+[dev-dependencies]
+serde_json.workspace = true
