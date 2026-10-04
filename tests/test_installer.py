@@ -94,6 +94,8 @@ done
             ["bash", str(self.project / "install.sh"), *args],
             input=answer,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             cwd=self.root,
             env=self.env,
