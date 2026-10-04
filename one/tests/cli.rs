@@ -250,7 +250,30 @@ fn adding_preserves_selection_and_concurrent_readers_agree() {
     assert!(!selections.is_empty());
     let saved = f.run(&[]);
     code(&saved, 0);
-    assert!(selections.iter().all(|s| *s == saved.stdout));
+    for selection in selections {
+        assert_eq!(text(&selection), text(&saved.stdout));
+    }
+}
+
+#[test]
+fn concurrent_readers_ignore_test_runner_stdin() {
+    // Re-run only the concurrent-reader test with CI-like stdin. This checks
+    // the fixture boundary: spawned commands must not inherit a task-list pipe
+    // or file, while explicit stdin overrides in the pipe/file tests still work.
+    let f = Fixture::new(BIN, false);
+    let input = f.root.join("runner-input");
+    fs::write(&input, "runner input, not a persistent task\n").unwrap();
+    for stdin in [Stdio::piped(), fs::File::open(input).unwrap().into()] {
+        let o = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "adding_preserves_selection_and_concurrent_readers_agree",
+            ])
+            .stdin(stdin)
+            .output()
+            .unwrap();
+        code(&o, 0);
+    }
 }
 
 #[test]

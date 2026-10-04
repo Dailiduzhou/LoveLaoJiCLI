@@ -2,7 +2,7 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 pub struct Fixture {
     pub root: PathBuf,
@@ -61,6 +61,9 @@ impl Fixture {
     pub fn cmd(&self) -> Command {
         let mut c = Command::new(self.bin);
         self.environment(&mut c);
+        // spawn() inherits stdin by default, unlike output(). Isolate commands
+        // from the test runner's pipe/file/terminal unless a test overrides it.
+        c.stdin(Stdio::null());
         c
     }
     pub fn run(&self, args: &[&str]) -> Output {
