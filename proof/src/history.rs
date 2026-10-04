@@ -76,7 +76,7 @@ pub fn collect(repo: &Repo, day: &LocalDay) -> Result<Totals> {
     }
     let mut totals = Totals::default();
     let mut stat_bytes = 0usize;
-    for entry in fields.chunks_exact(5) {
+    for entry in fields.as_chunks::<5>().0 {
         if start.elapsed() > Duration::from_secs(10) {
             return Err(invalid());
         }
