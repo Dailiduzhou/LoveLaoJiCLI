@@ -1,9 +1,11 @@
+mod clock;
+mod layout;
 mod palette;
 pub(crate) use palette::Palette;
 
 use cli_common::Language;
 use ratatui::{
-    layout::{Alignment, Constraint, Flex, Layout, Margin, Rect},
+    layout::{Alignment, Rect},
     style::Style,
     text::{Line, Span},
     widgets::{Paragraph, Wrap},
@@ -20,53 +22,9 @@ const REMAINING: [&str; 8] = [
     r" | '__/ _ \ '_ ` _ \ / _` | | '_ \| | '_ \ / _` |",
     r" | | |  __/ | | | | | (_| | | | | | | | | | (_| |",
     r" |_|  \___|_| |_| |_|\__,_|_|_| |_|_|_| |_|\__, |",
-    r"                                          __/ |",
-    r"                                         |___/ ",
+    r"                                            __/ |",
+    r"                                           |___/ ",
 ];
-// Figlet-standard-style digits so the clock matches the banner's lettering.
-// Every glyph is at most SLOT columns wide so clock cells never move when
-// their digit changes; narrow glyphs (`1`, `:`) center inside their cell.
-const DIGIT_ROWS: usize = 6;
-const SLOT: usize = 7;
-const DIGITS: [[&str; DIGIT_ROWS]; 10] = [
-    [
-        r"  ___  ", r" / _ \ ", r"| | | |", r"| |_| |", r" \___/ ", "       ",
-    ],
-    ["  _ ", " / |", " | |", " | |", " |_|", "    "],
-    [
-        r" ____  ", r"|___ \ ", r"  __) |", r" / __/ ", r"|_____|", "       ",
-    ],
-    [
-        r" _____ ", r"|___ / ", r"  |_ \ ", r" ___) |", r"|____/ ", "       ",
-    ],
-    [
-        r" _  _  ", r"| || | ", r"| ||_| ", r"   | | ", r"   |_| ", "       ",
-    ],
-    [
-        r" ____  ", r"| ___| ", r"|___ \ ", r" ___) |", r"|____/ ", "       ",
-    ],
-    [
-        r"  __   ", r" / /_  ", r"| '_ \ ", r"| (_) |", r" \___/ ", "       ",
-    ],
-    [
-        r" _____ ", r"|___  |", r"   / / ", r"  / /  ", r" / /   ", r"/_/    ",
-    ],
-    [
-        r"  ___  ", r" ( _ ) ", r" / _ \ ", r"| (_) |", r" \___/ ", "       ",
-    ],
-    [
-        r"  ___  ", r" / _ \ ", r"| (_) |", r" \__, |", r"   /_/ ", "       ",
-    ],
-];
-// Two one-row dots centered on the digit body (content rows 0..=4).
-const COLON: [&str; DIGIT_ROWS] = ["   ", "(_)", "   ", "(_)", "   ", "   "];
-fn glyph(byte: u8) -> &'static [&'static str; DIGIT_ROWS] {
-    if byte == b':' {
-        &COLON
-    } else {
-        &DIGITS[(byte - b'0') as usize]
-    }
-}
 const MESSAGES: [(&str, &str); 12] = [
     (
         "You don't have to earn a moment of rest.",
@@ -122,57 +80,9 @@ fn message(elapsed: Duration, language: Language) -> &'static str {
     let (en, zh) = MESSAGES[(elapsed.as_secs() / 8 % MESSAGES.len() as u64) as usize];
     language.text(en, zh)
 }
-fn time_text(seconds: u64) -> String {
-    if seconds >= 3600 {
-        format!(
-            "{:02}:{:02}:{:02}",
-            seconds / 3600,
-            seconds / 60 % 60,
-            seconds % 60
-        )
-    } else {
-        format!("{:02}:{:02}", seconds / 60, seconds % 60)
-    }
-}
 fn width(lines: &[impl AsRef<str>]) -> u16 {
     // Only bounded ASCII artwork is passed here, not localized text.
     lines.iter().map(|s| s.as_ref().len()).max().unwrap_or(0) as u16
-}
-// Square upsampling of one glyph. Duplicating '/' or '\\' would thicken the
-// stroke into a distorted `//` staircase, so slants are redrawn as a true 45°
-// stair line: one character per output row inside their s-by-s cell instead.
-fn scale_glyph(lines: &[&str], s: u16) -> Vec<String> {
-    let s = usize::from(s).max(1);
-    // Center narrow glyphs (`1`, `:`) inside the fixed SLOT-wide cell instead
-    // of leaving them flush-left under a blanket of trailing padding.
-    let visible = lines
-        .iter()
-        .map(|line| line.trim_end().len())
-        .max()
-        .unwrap_or(0)
-        .min(SLOT);
-    let xoff = (SLOT - visible) / 2 * s;
-    let mut out = vec![vec![' '; SLOT * s]; lines.len() * s];
-    for (row, line) in lines.iter().enumerate() {
-        for (col, byte) in line.bytes().enumerate() {
-            let (y, x) = (row * s, xoff + col * s);
-            match byte {
-                b'/' => (0..s).for_each(|k| out[y + s - 1 - k][x + k] = '/'),
-                b'\\' => (0..s).for_each(|k| out[y + k][x + k] = '\\'),
-                b' ' => {}
-                _ => {
-                    for dy in 0..s {
-                        for dx in 0..s {
-                            out[y + dy][x + dx] = byte as char;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    out.into_iter()
-        .map(|row| row.into_iter().collect())
-        .collect()
 }
 fn art(frame: &mut Frame, lines: Vec<Line<'static>>, area: Rect) {
     let w = (lines.iter().map(Line::width).max().unwrap_or(0) as u16).min(area.width);
@@ -184,26 +94,6 @@ fn art(frame: &mut Frame, lines: Vec<Line<'static>>, area: Rect) {
         h,
     );
     frame.render_widget(Paragraph::new(lines), rect);
-}
-// Fixed equal-width cells: every character occupies SLOT*s columns plus one
-// s-wide gap, and the strip centers as a whole, so a changing digit or colon
-// never moves its neighbors. Glyphs scale squarely to keep 45° slants intact.
-fn clock_art(frame: &mut Frame, area: Rect, time: &str, s: u16, style: Style) {
-    let slots = vec![Constraint::Length(SLOT as u16 * s); time.len()];
-    let cells = Layout::horizontal(slots)
-        .spacing(s)
-        .flex(Flex::Center)
-        .split(area);
-    for (byte, cell) in time.bytes().zip(cells.iter()) {
-        art(
-            frame,
-            scale_glyph(glyph(byte), s)
-                .into_iter()
-                .map(|line| Line::styled(line, style))
-                .collect(),
-            *cell,
-        );
-    }
 }
 fn garden(w: u16, h: u16, stage: usize, elapsed: Duration, palette: Palette) -> Vec<Line<'static>> {
     let (w, h) = (usize::from(w), usize::from(h));
@@ -285,47 +175,25 @@ pub fn draw(
     language: Language,
     palette: Palette,
 ) {
-    let left = wait.saturating_sub(elapsed);
-    let seconds = left.as_secs() + u64::from(left.subsec_nanos() != 0);
-    let time = time_text(seconds);
+    let time = clock::remaining(elapsed, wait);
     let remaining = format!("{} {time}", language.text("Remaining", "剩余"));
     let area = frame.area();
     if area.width < 24 || area.height < 10 {
         frame.render_widget(Paragraph::new(format!("afk\n{remaining}\nCtrl+C")), area);
         return;
     }
-    let inner = area.inner(Margin::new(2, 1));
-    let [main, comfort, notice, controls] = Layout::vertical([
-        Constraint::Min(0),
-        Constraint::Length(3),
-        Constraint::Length(1),
-        Constraint::Length(1),
-    ])
-    .areas(inner);
-    // The slant banner font has floating i-dots and a g-descender that detach
-    // when integer-scaled, so the banner always renders at its native size;
-    // the spare room goes to the big clock instead.
-    let large = main.width >= width(&REMAINING) && main.height >= 16;
-    let title_h = if large { 8 } else { 1 };
-    let gap = u16::from(main.height >= 8);
-    let caption_h = 1; // Always retain a readable localized caption.
-    let rows = DIGIT_ROWS as u16;
-    // Remaining height hosts the scaled clock; the garden gets the leftovers.
-    // A square scale keeps slanted strokes at 45° instead of fattening them.
-    let budget = main.height.saturating_sub(title_h + gap + caption_h);
-    let cells = time.len() as u16;
-    let fit = (budget / rows).min(main.width / ((SLOT as u16 + 1) * cells - 1));
-    let big_clock = fit >= 1;
-    let clock_h = rows * fit.min(4);
-    let [title, _, clock, caption, field] = Layout::vertical([
-        Constraint::Length(title_h),
-        Constraint::Length(gap),
-        Constraint::Length(clock_h),
-        Constraint::Length(caption_h),
-        Constraint::Min(0),
-    ])
-    .areas(main);
-    if large {
+    let layout::SceneLayout {
+        title,
+        clock,
+        caption,
+        field,
+        comfort,
+        notice,
+        controls,
+        banner,
+        scale,
+    } = layout::SceneLayout::new(area, time.len(), width(&REMAINING));
+    if banner {
         art(
             frame,
             REMAINING
@@ -346,8 +214,15 @@ pub fn draw(
             title,
         );
     }
-    if big_clock {
-        clock_art(frame, clock, &time, fit.min(4), palette.clock);
+    if scale != 0 {
+        art(
+            frame,
+            clock::lines(&time, scale)
+                .into_iter()
+                .map(|line| Line::styled(line, palette.clock))
+                .collect(),
+            clock,
+        );
     }
     frame.render_widget(
         Paragraph::new(remaining)
@@ -484,7 +359,7 @@ mod tests {
     }
     #[test]
     fn banner_alignment_and_large_clock_use_the_screen() {
-        let b = render(80, 24, 0, false, Language::English);
+        let b = render(80, 30, 0, false, Language::English);
         let x = 2 + (76 - width(&REMAINING)) / 2;
         for (y, row) in REMAINING.iter().enumerate() {
             for (col, c) in row.chars().enumerate() {
@@ -492,7 +367,17 @@ mod tests {
             }
         }
         let large = render(160, 50, 0, false, Language::English);
-        assert!(text(&large).contains("||||"));
+        let plan = layout::SceneLayout::new(Rect::new(0, 0, 160, 50), 5, width(&REMAINING));
+        let clock = clock::lines("01:40", plan.scale);
+        let x = plan.clock.x + (plan.clock.width - clock[0].len() as u16) / 2;
+        for (y, row) in clock.iter().enumerate() {
+            for (col, c) in row.chars().enumerate() {
+                assert_eq!(
+                    large[(x + col as u16, plan.clock.y + y as u16)].symbol(),
+                    c.to_string()
+                );
+            }
+        }
         assert!(text(&large).contains("Remaining 01:40"));
         // Footer is anchored near the bottom, not packed into the first ten rows.
         let bottom: String = (0..160).map(|x| large[(x, 48)].symbol()).collect();
@@ -537,68 +422,5 @@ mod tests {
                 }
             }
         }
-        assert_eq!(time_text(0), "00:00");
-        assert_eq!(time_text(59), "00:59");
-        assert_eq!(time_text(3600), "01:00:00");
-        assert_eq!(time_text(86400), "24:00:00");
-    }
-    #[test]
-    fn clock_glyphs_share_one_slot_width() {
-        assert!(DIGITS.iter().flatten().all(|row| row.len() <= SLOT));
-        assert!(DIGITS.iter().flatten().any(|row| row.len() == SLOT));
-        assert!(COLON.iter().all(|row| row.len() == 3));
-        assert_eq!(glyph(b':'), &COLON);
-        assert_eq!(glyph(b'4'), &DIGITS[4]);
-    }
-    #[test]
-    fn scaled_glyphs_keep_lean_45_degree_slants() {
-        // Naive duplication produced `//` and `\\` pairs that broke the font.
-        for digit in &DIGITS {
-            let lines = scale_glyph(digit, 3);
-            assert_eq!(lines.len(), DIGIT_ROWS * 3);
-            for line in &lines {
-                assert_eq!(line.len(), SLOT * 3);
-                assert!(!line.contains("//") && !line.contains("\\\\"));
-            }
-        }
-        // Narrow glyphs center inside their slot instead of hugging its left.
-        let colon = scale_glyph(&COLON, 2);
-        assert_eq!(colon[2].find('('), Some((SLOT - 3) / 2 * 2));
-        let one = scale_glyph(&DIGITS[1], 2);
-        assert!(one.iter().all(|line| line.starts_with(' ')));
-    }
-    #[test]
-    fn seven_stroke_descends_continuously() {
-        // Each '/' continues from one column to the upper right in the row
-        // above; a column that stops descending shows a broken diagonal.
-        let cols: Vec<Vec<usize>> = DIGITS[7]
-            .iter()
-            .map(|row| row.match_indices('/').map(|(i, _)| i).collect())
-            .collect();
-        for r in 3..DIGIT_ROWS {
-            for c in &cols[r] {
-                assert!(cols[r - 1].contains(&(c + 1)), "digit 7 gap at row {r}");
-            }
-        }
-    }
-    #[test]
-    fn changing_digits_never_move_the_colon() {
-        // The banner also contains parentheses, so scan only the clock rows.
-        let colon_column = |elapsed: u64| -> Option<u16> {
-            let b = render(80, 24, elapsed, false, Language::English);
-            (9..16)
-                .flat_map(|y| (0..78).map(move |x| (x, y)))
-                .filter(|&(x, y)| {
-                    b[(x, y)].symbol() == "("
-                        && ["_", "("].contains(&b[(x + 1, y)].symbol())
-                        && [")", "_"].contains(&b[(x + 2, y)].symbol())
-                })
-                .map(|(x, _)| x)
-                .min()
-        };
-        // 01:31 vs 00:11: digit widths differ (1 is narrow) yet cells stay put.
-        assert!(colon_column(9).is_some());
-        assert_eq!(colon_column(9), colon_column(89));
-        assert_eq!(colon_column(9), colon_column(49)); // 00:51
     }
 }
