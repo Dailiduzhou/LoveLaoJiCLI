@@ -30,27 +30,76 @@ Each tool is independently usable; `cli-common/` shares CLI, locale, private sta
 
 ## 交互式安装与卸载 / Interactive installation
 
-Linux / macOS 下使用 Bash 运行，无需 sudo。安装需要 Rust、Cargo 和常用 Unix 工具。
-Run with Bash on Linux/macOS, without sudo. Installation requires Rust, Cargo and standard Unix utilities.
+Linux / macOS / WSL 下使用 Bash，无需 sudo 或 Rust。需要 `curl`、`tar`、`sha256sum`（Linux）或 `shasum`（macOS）和常用 Unix 工具。
+Run with Bash on Linux/macOS/WSL, without sudo or Rust. Requires curl, tar, a SHA-256 utility and standard Unix tools.
+
+从 `raw.githubusercontent.com` 下载脚本，检查后执行；二进制来自 GitHub Releases，而不是 raw 源码目录。不要直接 `curl | bash`：交互确认需要保留标准输入。
+Download the script from raw.githubusercontent.com, inspect it, then execute it. Binaries come from GitHub Releases, not the raw source tree. Do not pipe into Bash: confirmation needs stdin.
 
 ```sh
-./install.sh                 # 菜单：编译安装 / 卸载 / 退出
-./install.sh install         # 直接进入安装确认 / Confirm installation
-./install.sh uninstall       # 直接进入卸载确认 / Confirm uninstallation
-./install.sh --help
+curl --fail --show-error --location --proto '=https' --proto-redir '=https' \
+  https://raw.githubusercontent.com/Dailiduzhou/LoveLaoJiCLI/main/install.sh \
+  --output install.sh
+# 检查脚本后 / After inspecting the script:
+bash install.sh install
 ```
 
-- 安装前需输入 `y` 确认；空输入或 EOF 取消，不更改配置。
-- 使用锁定依赖编译十四个工具的本机 release 版本，安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`。
+```sh
+bash install.sh                 # 菜单：发布版安装 / 卸载 / 本地编译 / 退出
+bash install.sh install         # 下载脚本对应版本 / Download the script's release version
+bash install.sh uninstall       # 直接进入卸载确认 / Confirm uninstallation
+bash install.sh --help
+LOVELAOJI_VERSION=v0.4.0 bash install.sh install  # 指定版本 / Pin a version
+
+# 在源码 checkout 内，保留本地构建安装（需要 Rust/Cargo）
+# Source checkout only; local build installation still requires Rust/Cargo:
+./install.sh install-local
+```
+
+脚本当前默认 `v0.4.0`，不会静默追踪 latest。只有对应 Release 发布后才能下载；404 或网络失败会报错，不自动回退编译。需要固定脚本本身时，将 raw URL 的 `main` 换成对应标签（例如 `v0.4.0`）。
+The script defaults to `v0.4.0`, not a mutable latest release. Assets must be published first; missing releases/network failures are errors, never a silent source-build fallback. Replace `main` in the raw URL with a release tag to pin the script too.
+
+| 平台 / Platform | Release target | 系统基线 / OS baseline |
+| --- | --- | --- |
+| Linux / WSL x86_64 | `x86_64-unknown-linux-gnu` | glibc 2.35+ (Ubuntu 22.04+) |
+| Linux / WSL ARM64 | `aarch64-unknown-linux-gnu` | glibc 2.39+ (Ubuntu 24.04+) |
+| macOS Intel | `x86_64-apple-darwin` | macOS 13+ |
+| macOS Apple Silicon | `aarch64-apple-darwin` | macOS 13+ |
+
+基于 `uname` 自动选择平台；Linux 包不是 musl 静态包，不支持 Alpine/musl 或 Windows 原生终端。旧系统可尝试源码构建；Git 功能仍需要本机 Git，日期功能需要系统时区数据。macOS 包未经 Apple 签名或公证。
+Platform selection uses uname. Linux packages use glibc, not static musl; Alpine/musl and native Windows are unsupported. Try source builds on older systems. Git features still require local Git; local dates require system timezone data. macOS binaries are not Apple-signed or notarized.
+
+- 安装前需输入 `y` 确认；空输入或 EOF 取消，不下载、不更改配置。
+- 下载十四个工具的对应平台压缩包和 SHA-256 文件，校验摘要、成员列表及版本可执行性后才更新安装。校验失败保留原安装；SHA-256 用于完整性校验，不是独立签名，仍需信任仓库和 HTTPS。
+- 安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`。`install-local` 使用锁定依赖构建本机 release，产物位于 `target/installer/<target>/release/`。
 - 按 `$SHELL` 自动配置 PATH：Bash 使用 `.bashrc` 和生效的登录配置文件；Zsh 使用 `${ZDOTDIR:-$HOME}` 中的 `.zshrc`、`.zprofile`；Fish 使用 `${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/lovelaojicli.fish`。
 - PATH 配置带有项目专属标记，重复安装不会重复添加。安装目录优先于原有 PATH，其他位置的同名程序不会被覆盖。
-- 卸载不需要 Rust，按安装记录移除十四个工具及本项目 PATH 配置，保留其他配置、文件和源码构建产物。
+- 卸载不需要 Rust 或联网，按安装记录移除十四个工具及本项目 PATH 配置，保留其他配置、文件、用户状态和源码构建产物。
 - 脚本提示按 locale 切换中英文。若设置了自定义 XDG 目录，卸载时请保持相同的 `XDG_DATA_HOME`。
 
-Installation asks for confirmation, builds all fourteen release binaries and registers the user-local directory in your Bash/Zsh/Fish startup configuration. Reinstallation is idempotent. Uninstallation removes only managed binaries and PATH blocks; Rust is not required. Keep the same `XDG_DATA_HOME` when uninstalling.
+Installation requires confirmation, verifies the archive's SHA-256, exact member list and executable versions before updating the installation, and registers the user-local directory in Bash/Zsh/Fish. Verification failures preserve an existing installation. Checksums provide integrity, not independent signatures; trust in the repository and HTTPS is still required. Reinstallation is idempotent. Source installation uses locked dependencies and `target/installer/<target>/release/`. Offline uninstallation removes only managed binaries and PATH blocks, preserving state and unrelated files. Keep the same `XDG_DATA_HOME` when uninstalling.
 
 **安装后打开新终端即可使用命令**，或执行脚本最后打印的 PATH 命令，立即在当前终端生效。脚本不能直接修改父终端环境，请勿 `source install.sh`。卸载后也请打开新终端刷新 PATH 和命令缓存。
 Open a new terminal after installation/uninstallation. To use the tools immediately, run the PATH command printed by the installer. Execute the installer; do not source it.
+
+## 发布 / Releases
+
+[Release workflow](.github/workflows/release.yml) 在推送稳定版标签 `vX.Y.Z` 时触发，也可通过 Actions 手动指定一个已存在的标签。先在 Linux 上执行完整本地验证，再用四个平台的原生 runner 构建、检查中英文 `--help`/`--version`、打包。每个平台上传一个包含全部十四个工具的 `.tar.gz` 及对应 `.sha256`。所有平台成功后才创建/补全 draft 并正式发布；重跑不会覆盖已公开的版本。
+The workflow runs on stable version tags or manual dispatch with an existing tag. Full Linux validation precedes four native builds and bilingual help/version smoke tests. Each platform provides one archive containing all fourteen tools plus a SHA-256 file. A draft is published only after all builds succeed; published releases cannot be overwritten by a rerun.
+
+发布前同步 `Cargo.toml` 的 workspace 版本、`Cargo.lock`、`install.sh` 的默认版本和本文版本示例，并提交代码。打包脚本会拒绝标签/工作区/安装器版本不一致，或安装器工具列表遗漏二进制的情况。仓库需启用 Actions 并允许发布 job 使用 `contents: write`（其余 job 只读）。
+Before tagging, synchronize the workspace version, lockfile, installer default and README examples, then commit. Packaging rejects version mismatches and installer/workspace tool-list drift. Enable Actions and permit the publish job's `contents: write`; other jobs are read-only.
+
+```sh
+# 确保版本尚未发布 / Use a version that has not already been published:
+git tag v0.4.0
+git push origin v0.4.0
+
+# 可选：本机复现打包，不创建 GitHub Release
+# Optional native packaging; does not publish anything:
+bash scripts/package-release.sh v0.4.0 "$(rustc -vV | awk '/^host: / { print $2 }')"
+# 输出 / Output: dist/lovelaojicli-v0.4.0-<target>.tar.gz[.sha256]
+```
 
 ## 最小功能 / Features
 
@@ -257,13 +306,19 @@ Modules separate responsibilities without changing CLI arguments or persisted re
 
 ## 测试 / Tests
 
-```sh
-cargo fmt --all -- --check
-cargo test --workspace             # 新增集成测试需要 Git 和 Python 3 / Git + Python 3 required
-cargo clippy --workspace --all-targets -- -D warnings
+保留独立本地验证脚本，不安装、不编辑 shell 配置。需要 Rust（含 rustfmt/clippy）、Cargo、Git、Python 3；执行安装器隔离测试、fmt、workspace 测试、clippy、锁定依赖 release 构建和跨工具 PTY 验收。产物位于 `target/verify/<target>/release/`。
+The local verification script never installs or edits shell configuration. Requires Rust (rustfmt/clippy), Cargo, Git and Python 3. It runs isolated installer tests, formatting, workspace tests, clippy, a locked release build and cross-tool PTY acceptance. Binaries remain in `target/verify/<target>/release/`.
 
-# 安装脚本测试（需要 Python 3；隔离 HOME，使用模拟编译器）
-# Installer tests (Python 3; isolated HOME and mock compiler)
+```sh
+./scripts/verify.sh
+
+# 或逐项执行 / Or run checks individually:
+cargo fmt --all -- --check
+cargo test --locked --workspace    # 新增集成测试需要 Git 和 Python 3 / Git + Python 3 required
+cargo clippy --locked --workspace --all-targets -- -D warnings
+
+# 安装脚本测试（隔离 HOME；模拟编译器/下载，无网络）
+# Installer tests (isolated HOME; mock compiler/downloads, no network)
 bash -n install.sh
 python3 -m unittest discover -s tests -p 'test_installer.py' -v
 
