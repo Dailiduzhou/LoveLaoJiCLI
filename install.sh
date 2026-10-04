@@ -72,7 +72,7 @@ select_shell() {
     ;;
   zsh) RC_FILES=("${ZDOTDIR:-$HOME}/.zshrc" "${ZDOTDIR:-$HOME}/.zprofile") ;;
   fish) RC_FILES=("${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/lovelaojicli.fish") ;;
-  *) fail "Unsupported shell: $SHELL_NAME (use Bash, Zsh or Fish)." "暂不支持此 shell：$SHELL_NAME（支持 Bash、Zsh、Fish）。" ;;
+  *) fail "Unsupported shell: $SHELL_NAME (use Bash, Zsh or Fish)." "暂不支持此 shell：${SHELL_NAME}（支持 Bash、Zsh、Fish）。" ;;
   esac
   local file
   for file in "${RC_FILES[@]}"; do check_path "$file"; done
@@ -146,7 +146,7 @@ prepare_release() {
   Linux/aarch64 | Linux/arm64) target=aarch64-unknown-linux-gnu ;;
   Darwin/x86_64) target=x86_64-apple-darwin ;;
   Darwin/arm64 | Darwin/aarch64) target=aarch64-apple-darwin ;;
-  *) fail "Unsupported platform: $platform/$arch; try install-local in a checkout." "不支持的平台：$platform/$arch；可在源码目录尝试 install-local。" ;;
+  *) fail "Unsupported platform: $platform/$arch; try install-local in a checkout." "不支持的平台：$platform/${arch}；可在源码目录尝试 install-local。" ;;
   esac
   for tool in curl tar; do
     command -v "$tool" >/dev/null 2>&1 || fail "Required command: $tool" "需要命令：$tool"
@@ -161,7 +161,7 @@ prepare_release() {
   asset="lovelaojicli-$RELEASE_VERSION-$target.tar.gz"
   base="$REPOSITORY/releases/download/$RELEASE_VERSION"
   DOWNLOAD_DIR=$(mktemp -d)
-  text "Downloading $RELEASE_VERSION ($target)…" "正在下载 $RELEASE_VERSION（$target）…"
+  text "Downloading $RELEASE_VERSION ($target)…" "正在下载 ${RELEASE_VERSION}（${target}）…"
   for tool in "$asset" "$asset.sha256"; do
     curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' \
       --connect-timeout 20 --max-time 300 --retry 3 \
@@ -180,7 +180,7 @@ prepare_release() {
     tar -xOzf "$DOWNLOAD_DIR/$asset" "$tool" >"$SOURCE_BIN/$tool"
     [[ -s "$SOURCE_BIN/$tool" ]] || fail "Empty release binary: $tool" "Release 可执行文件为空：$tool"
     chmod 755 "$SOURCE_BIN/$tool"
-    actual=$("$SOURCE_BIN/$tool" --version) || fail "Cannot run $tool; check OS compatibility or use install-local." "无法运行 $tool；请检查系统兼容性或使用 install-local。"
+    actual=$("$SOURCE_BIN/$tool" --version) || fail "Cannot run $tool; check OS compatibility or use install-local." "无法运行 ${tool}；请检查系统兼容性或使用 install-local。"
     [[ "$actual" == "$tool ${RELEASE_VERSION#v}" ]] || fail "Unexpected binary version: $tool" "可执行文件版本不符合预期：$tool"
   done
 }
@@ -209,7 +209,7 @@ install_tools() {
   if [[ "$mode" == install-local ]]; then
     text "Build and install: ${TOOLS[*]} → $BIN_DIR" "编译并安装：${TOOLS[*]} → $BIN_DIR"
   else
-    text "Install release $RELEASE_VERSION: ${TOOLS[*]} → $BIN_DIR" "安装发布版 $RELEASE_VERSION：${TOOLS[*]} → $BIN_DIR"
+    text "Install release $RELEASE_VERSION: ${TOOLS[*]} → $BIN_DIR" "安装发布版 ${RELEASE_VERSION}：${TOOLS[*]} → $BIN_DIR"
   fi
   text 'PATH configuration files:' '将配置以下文件中的 PATH：'
   printf '  %s\n' "${RC_FILES[@]}"
