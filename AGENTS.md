@@ -42,3 +42,8 @@ tools (status):
    - third-batch targets remain Linux/macOS/WSL Unix; runtime is offline and local-only.
 
 behavior specs live in README.md (bilingual); per-tool deep dives live in the tool's own README.md (en-US) and README-zh.md (zh-CN). keep install.sh, README.md and workspace members in sync when adding or changing a tool.
+
+shell portability lessons (install.sh, macOS /bin/bash 3.2):
+- never write a bare `$VAR` immediately followed by a multibyte character (full-width ：（）；，？). Apple's bash 3.2 misparses the UTF-8 lead byte as part of the variable name; with `set -u` it spuriously aborts with `unbound variable` and the error message carries a raw 0xEF byte that crashes strict UTF-8 decoding of captured stderr in tests. always brace such expansions: `${VAR}：`.
+- apple bash 3.2 differs from bash 4/5 beyond this bug (e.g. vanilla bash 3.2 ignores `set -e` for subshells called from if-contexts); `bash -n` on linux proves nothing for macOS. validate install.sh changes on a real macOS runner (temp debug branch + workflow_dispatch) before re-tagging a release.
+- run `bash scripts/bump-version.sh vX.Y.Z` before tagging; it syncs workspace version, Cargo.lock, install.sh default, README examples and the ROADMAP dev version in one step, and refuses stale references.
