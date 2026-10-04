@@ -1,8 +1,8 @@
 # 实施状态与后续路线图 / Implementation status and roadmap
 
 本文件统一记录**已实现、当前限制、待补验收、后续实现**，不是所有设想都已上线的功能清单。
-首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.4.0`（第三批及 afk TUI）。后续交付应同步更新本文件。
-This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.4.0` (batch three and afk TUI).
+首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.4.1`（第三批及 afk TUI）。后续交付应同步更新本文件。
+This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.4.1` (batch three and afk TUI).
 
 - 当前接口与行为：[README.md](README.md) 及各工具双语 README。
 - 开发约束：[AGENTS.md](AGENTS.md)；业务参数、依赖准入和版本同步以该文件为准。

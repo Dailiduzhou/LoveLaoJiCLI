@@ -87,18 +87,18 @@ Open a new terminal after installation/uninstallation. To use the tools immediat
 [Release workflow](.github/workflows/release.yml) 在推送稳定版标签 `vX.Y.Z` 时触发，也可通过 Actions 手动指定一个已存在的标签。先在 Linux 上执行完整本地验证，再用四个平台的原生 runner 构建、检查中英文 `--help`/`--version`、打包。每个平台上传一个包含全部十四个工具的 `.tar.gz` 及对应 `.sha256`。所有平台成功后才创建/补全 draft 并正式发布；重跑不会覆盖已公开的版本。
 The workflow runs on stable version tags or manual dispatch with an existing tag. Full Linux validation precedes four native builds and bilingual help/version smoke tests. Each platform provides one archive containing all fourteen tools plus a SHA-256 file. A draft is published only after all builds succeed; published releases cannot be overwritten by a rerun.
 
-发布前同步 `Cargo.toml` 的 workspace 版本、`Cargo.lock`、`install.sh` 的默认版本和本文版本示例，并提交代码。打包脚本会拒绝标签/工作区/安装器版本不一致，或安装器工具列表遗漏二进制的情况。仓库需启用 Actions 并允许发布 job 使用 `contents: write`（其余 job 只读）。
-Before tagging, synchronize the workspace version, lockfile, installer default and README examples, then commit. Packaging rejects version mismatches and installer/workspace tool-list drift. Enable Actions and permit the publish job's `contents: write`; other jobs are read-only.
+发布前运行 `bash scripts/bump-version.sh vX.Y.Z`，它会同步 workspace 版本、`Cargo.lock`、`install.sh` 默认版本、本文版本示例和 ROADMAP 开发版本，并拒绝残留旧版本或未继承 workspace 版本的 crate；审阅 diff 后提交并打标签。打包脚本会拒绝标签/工作区/安装器版本不一致，或安装器工具列表遗漏二进制的情况。仓库需启用 Actions 并允许发布 job 使用 `contents: write`（其余 job 只读）。
+Before tagging, run `bash scripts/bump-version.sh vX.Y.Z`; it synchronizes the workspace version, lockfile, installer default, README examples and the ROADMAP dev version, and rejects stale references or crates not inheriting the workspace version. Review the diff, commit, then tag. Packaging rejects version mismatches and installer/workspace tool-list drift. Enable Actions and permit the publish job's `contents: write`; other jobs are read-only.
 
 ```sh
 # 确保版本尚未发布 / Use a version that has not already been published:
-git tag v0.4.1
-git push origin v0.4.1
+git tag vX.Y.Z
+git push origin vX.Y.Z
 
 # 可选：本机复现打包，不创建 GitHub Release
 # Optional native packaging; does not publish anything:
-bash scripts/package-release.sh v0.4.1 "$(rustc -vV | awk '/^host: / { print $2 }')"
-# 输出 / Output: dist/lovelaojicli-v0.4.1-<target>.tar.gz[.sha256]
+bash scripts/package-release.sh vX.Y.Z "$(rustc -vV | awk '/^host: / { print $2 }')"
+# 输出 / Output: dist/lovelaojicli-vX.Y.Z-<target>.tar.gz[.sha256]
 ```
 
 ## 最小功能 / Features

@@ -3,6 +3,7 @@
 import os
 import hashlib
 import io
+import re
 import tarfile
 from pathlib import Path
 import shutil
@@ -13,6 +14,19 @@ import unittest
 SCRIPT = Path(__file__).resolve().parents[1] / "install.sh"
 BEGIN = "# >>> LoveLaoJiCLI PATH >>>"
 END = "# <<< LoveLaoJiCLI PATH <<<"
+
+
+def _default_version():
+    """Track the installer's pinned default so bumps need no test edits."""
+    match = re.search(
+        r"LOVELAOJI_VERSION:-(v[0-9]+\.[0-9]+\.[0-9]+)", SCRIPT.read_text()
+    )
+    if match is None:
+        raise SystemExit("install.sh: cannot find the pinned LOVELAOJI_VERSION default")
+    return match.group(1)
+
+
+DEFAULT_VERSION = _default_version()
 
 
 class InstallerFixture(unittest.TestCase):
@@ -338,7 +352,7 @@ cp "$ASSET_DIR/${url##*/}" "$output"
         self.make_archive()
 
     def make_archive(
-        self, target="x86_64-unknown-linux-gnu", version="v0.4.1", variant=None
+        self, target="x86_64-unknown-linux-gnu", version=DEFAULT_VERSION, variant=None
     ):
         archive = self.assets / f"lovelaojicli-{version}-{target}.tar.gz"
         with tarfile.open(archive, "w:gz") as tar:
@@ -384,7 +398,7 @@ cp "$ASSET_DIR/${url##*/}" "$output"
                 self.env.update(MOCK_OS=system, MOCK_ARCH=arch)
                 self.run_script("install")
                 self.assertIn(
-                    f"v0.4.1-{target}.tar.gz", (self.root / "downloads").read_text()
+                    f"{DEFAULT_VERSION}-{target}.tar.gz", (self.root / "downloads").read_text()
                 )
                 for tool in TOOLS:
                     self.assertTrue(os.access(self.bin_dir / tool, os.X_OK))
