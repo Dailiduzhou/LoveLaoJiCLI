@@ -125,7 +125,11 @@ old snapshot: it does not flush input, restore termios or emit screen/cursor
 escapes into the new owner's terminal, including from Ratatui/guard destruction.
 This means forced ownership transfer cannot guarantee restoration of afk's old
 screen/settings; normal Ctrl+Z still restores before stopping. Foreground reentry
-captures a fresh snapshot.
+captures a fresh snapshot. If ownership changes between a foreground check and
+an input read, a background read error (such as EIO with SIGTTIN blocked) silently
+relinquishes the session instead of terminating with a diagnostic on the new
+owner's terminal. The timer and pending termination signals remain active;
+read errors while still in the foreground remain errors.
 
 ## Language, hooks and tests
 
@@ -136,15 +140,20 @@ Hidden environment-only test hooks (never in help):
 
 - `AFK_FAST=1`: wait for 1% of the validated duration; other values ignored.
 - `AFK_TEST_FAILURE=enter|draw|panic`: fail after terminal entry, inject a backend
-  write error, or panic after a rendered frame. Only applies to TUI mode; unknown
-  values are ignored. For isolated tests, not normal use.
+  write error, or panic after a rendered frame.
+- `AFK_TEST_FAILURE=read-stop`: raise SIGSTOP once after the foreground check,
+  immediately before the first TUI input read. The PTY test controller transfers
+  ownership and sends SIGCONT to reproduce the background-read race deterministically.
+  These failure hooks apply only to TUI mode; unknown values are ignored. For
+  isolated tests, not normal use.
 
 `cargo test -p afk` includes TestBackend snapshots and Python-backed real PTYs:
 all three color modes, NO_COLOR precedence, spatial/time-based rainbow motion,
 white foreground, unchanged layout and cleanup, completion, key floods, no deadline
 extension or queued-input leakage, resize,
 Chinese output, Ctrl+C/SIGINT/SIGTERM/SIGHUP/SIGQUIT, setup/write/panic failures,
-Ctrl+Z/fg/bg, forced foreground transfer without stale cleanup, suspension past
+Ctrl+Z/fg/bg, forced foreground transfer (including the check/read race) without
+stale cleanup or diagnostics, suspension past
 the deadline, dumb/small/redirected fallback and exact
 termios restoration. Tests also reject accidental cursor-position queries.
 

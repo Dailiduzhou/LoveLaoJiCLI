@@ -29,7 +29,9 @@ class InstallerFixture(unittest.TestCase):
         self.fake_bin = self.root / "fake-bin"
         self.fake_bin.mkdir()
         self.executable("rustc", "#!/bin/sh\nprintf 'host: test-host\\n'\n")
-        self.executable("cargo", """#!/usr/bin/env bash
+        self.executable(
+            "cargo",
+            """#!/usr/bin/env bash
 set -eu
 [[ ${FAIL_BUILD:-0} == 0 ]] || exit 42
 while [[ $# -gt 0 ]]; do
@@ -44,12 +46,27 @@ for tool in love happiness joy patience sprinkle later enough stuck duck one afk
     printf '#!/bin/sh\\nprintf "%s 0.1.0\\\\n"\\n' "$tool" > "$target/$host/release/$tool"
     chmod +x "$target/$host/release/$tool"
 done
-""")
+""",
+        )
         self.env = os.environ.copy()
-        for key in ["LC_ALL", "LC_MESSAGES", "LANGUAGE", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "ZDOTDIR", "BASH_ENV", "ENV", "LOVELAOJI_VERSION"]:
+        for key in [
+            "LC_ALL",
+            "LC_MESSAGES",
+            "LANGUAGE",
+            "XDG_DATA_HOME",
+            "XDG_CONFIG_HOME",
+            "ZDOTDIR",
+            "BASH_ENV",
+            "ENV",
+            "LOVELAOJI_VERSION",
+        ]:
             self.env.pop(key, None)
-        self.env.update(HOME=str(self.home), SHELL="/bin/bash", LANG="C",
-                        PATH=f"{self.fake_bin}:/usr/bin:/bin")
+        self.env.update(
+            HOME=str(self.home),
+            SHELL="/bin/bash",
+            LANG="C",
+            PATH=f"{self.fake_bin}:/usr/bin:/bin",
+        )
         self.install_dir = self.home / ".local/share/lovelaojicli"
         self.bin_dir = self.install_dir / "bin"
 
@@ -59,9 +76,15 @@ done
         path.chmod(0o755)
 
     def run_script(self, *args, answer="y\n", ok=True):
-        result = subprocess.run(["bash", str(self.project / "install.sh"), *args],
-                                input=answer, text=True, capture_output=True,
-                                cwd=self.root, env=self.env, timeout=20)
+        result = subprocess.run(
+            ["bash", str(self.project / "install.sh"), *args],
+            input=answer,
+            text=True,
+            capture_output=True,
+            cwd=self.root,
+            env=self.env,
+            timeout=20,
+        )
         if ok:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         else:
@@ -83,13 +106,39 @@ class LocalInstallerTests(InstallerFixture):
         self.assertEqual(bashrc.stat().st_mode & 0o777, 0o640)
         self.assertIn(BEGIN, (self.home / ".profile").read_text())
         result = subprocess.run(
-            ["bash", "--noprofile", "--norc", "-c",
-             '. "$HOME/.bashrc"; . "$HOME/.bashrc"; command -v love; love; printf "%s\\n" "$PATH"'],
-            env=self.env, text=True, capture_output=True, check=True)
+            [
+                "bash",
+                "--noprofile",
+                "--norc",
+                "-c",
+                '. "$HOME/.bashrc"; . "$HOME/.bashrc"; command -v love; love; printf "%s\\n" "$PATH"',
+            ],
+            env=self.env,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
         self.assertEqual(result.stdout.splitlines()[0], str(self.bin_dir / "love"))
         self.assertIn("love 0.1.0", result.stdout)
-        self.assertEqual(result.stdout.splitlines()[-1].split(":").count(str(self.bin_dir)), 1)
-        for tool in ["love", "happiness", "joy", "patience", "sprinkle", "later", "enough", "stuck", "duck", "one", "afk", "goodnight", "proof", "poke"]:
+        self.assertEqual(
+            result.stdout.splitlines()[-1].split(":").count(str(self.bin_dir)), 1
+        )
+        for tool in [
+            "love",
+            "happiness",
+            "joy",
+            "patience",
+            "sprinkle",
+            "later",
+            "enough",
+            "stuck",
+            "duck",
+            "one",
+            "afk",
+            "goodnight",
+            "proof",
+            "poke",
+        ]:
             self.assertTrue((self.bin_dir / tool).is_file())
         saved_state = self.home / ".local/state/lovelaojicli/keep-card"
         saved_state.parent.mkdir(parents=True)
@@ -100,12 +149,32 @@ class LocalInstallerTests(InstallerFixture):
         self.assertEqual(bashrc.read_text(), original)
         self.assertEqual(unrelated.read_text(), "untouched")
         self.assertEqual(saved_state.read_text(), "user context")
-        for tool in ["love", "happiness", "joy", "patience", "sprinkle", "later", "enough", "stuck", "duck", "one", "afk", "goodnight", "proof", "poke"]:
+        for tool in [
+            "love",
+            "happiness",
+            "joy",
+            "patience",
+            "sprinkle",
+            "later",
+            "enough",
+            "stuck",
+            "duck",
+            "one",
+            "afk",
+            "goodnight",
+            "proof",
+            "poke",
+        ]:
             self.assertFalse((self.bin_dir / tool).exists())
         self.run_script("uninstall")
 
     def test_cancel_and_eof_do_not_install(self):
-        for args, answer in [((), "0\n"), ((), ""), (("install-local",), "n\n"), (("install-local",), "")]:
+        for args, answer in [
+            ((), "0\n"),
+            ((), ""),
+            (("install-local",), "n\n"),
+            (("install-local",), ""),
+        ]:
             self.run_script(*args, answer=answer)
             self.assertFalse(self.install_dir.exists())
             self.assertFalse((self.home / ".bashrc").exists())
@@ -181,15 +250,25 @@ class LocalInstallerTests(InstallerFixture):
             self.assertNotIn(BEGIN, file.read_text())
 
     def test_fish_configuration(self):
-        self.env.update(SHELL="/usr/bin/fish", XDG_CONFIG_HOME=str(self.home / "custom config"))
+        self.env.update(
+            SHELL="/usr/bin/fish", XDG_CONFIG_HOME=str(self.home / "custom config")
+        )
         self.run_script("install-local")
         config = Path(self.env["XDG_CONFIG_HOME"]) / "fish/conf.d/lovelaojicli.fish"
         self.assertIn("set -gx PATH", config.read_text())
         if shutil.which("fish"):
             result = subprocess.run(
-                [shutil.which("fish"), "--no-config", "-c",
-                 'source "$XDG_CONFIG_HOME/fish/conf.d/lovelaojicli.fish"; source "$XDG_CONFIG_HOME/fish/conf.d/lovelaojicli.fish"; command -s love; love'],
-                env=self.env, text=True, capture_output=True, check=True)
+                [
+                    shutil.which("fish"),
+                    "--no-config",
+                    "-c",
+                    'source "$XDG_CONFIG_HOME/fish/conf.d/lovelaojicli.fish"; source "$XDG_CONFIG_HOME/fish/conf.d/lovelaojicli.fish"; command -s love; love',
+                ],
+                env=self.env,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
             self.assertEqual(result.stdout.splitlines()[0], str(self.bin_dir / "love"))
         self.run_script("uninstall")
         self.assertNotIn(BEGIN, config.read_text())
@@ -226,13 +305,22 @@ class ReleaseInstallerTests(InstallerFixture):
         super().setUp()
         self.assets = self.root / "assets"
         self.assets.mkdir()
-        self.env.update(ASSET_DIR=str(self.assets), DOWNLOAD_LOG=str(self.root / "downloads"),
-                        MOCK_OS="Linux", MOCK_ARCH="x86_64")
-        self.executable("uname", "#!/bin/sh\ncase $1 in -s) echo $MOCK_OS;; -m) echo $MOCK_ARCH;; esac\n")
+        self.env.update(
+            ASSET_DIR=str(self.assets),
+            DOWNLOAD_LOG=str(self.root / "downloads"),
+            MOCK_OS="Linux",
+            MOCK_ARCH="x86_64",
+        )
+        self.executable(
+            "uname",
+            "#!/bin/sh\ncase $1 in -s) echo $MOCK_OS;; -m) echo $MOCK_ARCH;; esac\n",
+        )
         # Any attempt to compile in release mode fails the test.
         self.executable("cargo", "#!/bin/sh\nexit 99\n")
         self.executable("rustc", "#!/bin/sh\nexit 99\n")
-        self.executable("curl", """#!/usr/bin/env bash
+        self.executable(
+            "curl",
+            """#!/usr/bin/env bash
 set -eu
 [[ ${FAIL_DOWNLOAD:-0} == 0 ]] || exit 22
 while [[ $# -gt 0 ]]; do
@@ -245,10 +333,13 @@ done
 printf '%s\n' "$url" >> "$DOWNLOAD_LOG"
 [[ $url == https://github.com/Dailiduzhou/LoveLaoJiCLI/releases/download/* ]]
 cp "$ASSET_DIR/${url##*/}" "$output"
-""")
+""",
+        )
         self.make_archive()
 
-    def make_archive(self, target="x86_64-unknown-linux-gnu", version="v0.4.0", variant=None):
+    def make_archive(
+        self, target="x86_64-unknown-linux-gnu", version="v0.4.1", variant=None
+    ):
         archive = self.assets / f"lovelaojicli-{version}-{target}.tar.gz"
         with tarfile.open(archive, "w:gz") as tar:
             for tool in TOOLS:
@@ -258,7 +349,7 @@ cp "$ASSET_DIR/${url##*/}" "$output"
                 if tool == "poke" and variant == "wrong-version":
                     data = b'#!/bin/sh\necho "poke 0.0.0"\n'
                 if tool == "poke" and variant == "cannot-run":
-                    data += b'exit 1\n'
+                    data += b"exit 1\n"
                 member = tarfile.TarInfo(tool)
                 member.size = len(data)
                 member.mode = 0o755
@@ -270,10 +361,14 @@ cp "$ASSET_DIR/${url##*/}" "$output"
                 else:
                     tar.addfile(member, io.BytesIO(data))
             if variant in ("traversal", "duplicate"):
-                member = tarfile.TarInfo("../escaped" if variant == "traversal" else "love")
+                member = tarfile.TarInfo(
+                    "../escaped" if variant == "traversal" else "love"
+                )
                 tar.addfile(member)
         checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
-        archive.with_name(archive.name + ".sha256").write_text(f"{checksum}  {archive.name}\n")
+        archive.with_name(archive.name + ".sha256").write_text(
+            f"{checksum}  {archive.name}\n"
+        )
         return archive
 
     def test_platform_mapping_and_no_rust_required(self):
@@ -288,7 +383,9 @@ cp "$ASSET_DIR/${url##*/}" "$output"
                 self.make_archive(target)
                 self.env.update(MOCK_OS=system, MOCK_ARCH=arch)
                 self.run_script("install")
-                self.assertIn(f"v0.4.0-{target}.tar.gz", (self.root / "downloads").read_text())
+                self.assertIn(
+                    f"v0.4.1-{target}.tar.gz", (self.root / "downloads").read_text()
+                )
                 for tool in TOOLS:
                     self.assertTrue(os.access(self.bin_dir / tool, os.X_OK))
                 self.run_script("uninstall")
@@ -302,10 +399,10 @@ cp "$ASSET_DIR/${url##*/}" "$output"
         self.assertFalse(self.bin_dir.exists())
 
     def test_explicit_version(self):
-        self.env["LOVELAOJI_VERSION"] = "v0.4.1"
-        self.make_archive(version="v0.4.1")
+        self.env["LOVELAOJI_VERSION"] = "v0.4.2"
+        self.make_archive(version="v0.4.2")
         self.run_script("install")
-        self.assertIn("/v0.4.1/", (self.root / "downloads").read_text())
+        self.assertIn("/v0.4.2/", (self.root / "downloads").read_text())
 
     def test_download_failure_and_failed_upgrade(self):
         self.env["FAIL_DOWNLOAD"] = "1"

@@ -27,8 +27,10 @@ def wait_child(pid, flags=0):
 
 
 with tempfile.TemporaryDirectory(prefix="afk-owner-") as home:
-    # Exercise both ordinary session disposal and termination/Drop disposal.
-    for immediate_signal in (False, True):
+    # Exercise ordinary and termination/Drop disposal, plus deterministic loss
+    # between the event loop's foreground check and its input read.
+    for read_race, immediate_signal in ((False, False), (False, True),
+                                        (True, False), (True, True)):
         master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 18, 60, 0, 0))
         original = termios.tcgetattr(slave)
@@ -50,6 +52,8 @@ with tempfile.TemporaryDirectory(prefix="afk-owner-") as home:
                 env = dict(os.environ, HOME=home, TERM="xterm", LC_ALL="C", NO_COLOR="1")
                 env.pop("AFK_FAST", None)
                 env.pop("AFK_TEST_FAILURE", None)
+                if read_race:
+                    env["AFK_TEST_FAILURE"] = "read-stop"
                 os.execve(binary, [binary, "30s"], env)
             os.close(ready_read)
             reaped = False
@@ -62,12 +66,16 @@ with tempfile.TemporaryDirectory(prefix="afk-owner-") as home:
                 while termios.tcgetattr(slave)[3] & termios.ICANON:
                     assert time.monotonic() < deadline, "TUI did not enter"
                     time.sleep(.01)
-                # Allow a frame to hide the cursor, so Ratatui's Drop is covered.
-                time.sleep(.2)
-                # Freeze only to make the ownership transfer deterministic;
-                # restoration during SIGSTOP is not the behavior under test.
-                os.kill(worker, signal.SIGSTOP)
-                assert os.WIFSTOPPED(wait_child(worker, os.WUNTRACED))
+                if not read_race:
+                    # Allow a frame to hide the cursor, covering Ratatui's Drop.
+                    time.sleep(.2)
+                    os.kill(worker, signal.SIGSTOP)
+                # read-stop freezes inside afk after its foreground check but
+                # before read(2), making the background EIO race reproducible.
+                # Restoration during SIGSTOP is not the behavior under test.
+                stopped = wait_child(worker, os.WUNTRACED)
+                assert os.WIFSTOPPED(stopped), stopped
+                assert os.WSTOPSIG(stopped) == signal.SIGSTOP, stopped
                 os.tcsetpgrp(slave, os.getpgrp())
                 replacement = termios.tcgetattr(slave)
                 replacement[0] ^= termios.IXON
@@ -84,7 +92,8 @@ with tempfile.TemporaryDirectory(prefix="afk-owner-") as home:
                     os.kill(worker, signal.SIGTERM)
                 status = wait_child(worker)
                 reaped = True
-                assert os.waitstatus_to_exitcode(status) == -signal.SIGTERM
+                assert os.waitstatus_to_exitcode(status) == -signal.SIGTERM, (
+                    read_race, immediate_signal, os.waitstatus_to_exitcode(status))
                 assert termios.tcgetattr(slave) == replacement, "Drop restored stale termios"
             except BaseException:
                 import traceback

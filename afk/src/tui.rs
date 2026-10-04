@@ -5,7 +5,7 @@ mod terminal;
 
 use cli_common::{Language, Result};
 use ratatui::backend::Backend;
-use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGTSTP};
+use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGSTOP, SIGTSTP};
 use signals::{JobControlMask, Signals};
 use std::{
     io,
@@ -35,6 +35,8 @@ pub fn run(
     let _job_control = JobControlMask::new()?;
     let mut session: Option<Session> = None;
     let mut noticed_at: Option<Instant> = None;
+    // Deterministic test seam for ownership loss after the foreground check.
+    let mut stop_before_read = fault_name().as_deref() == Some("read-stop");
     loop {
         let signal = signals.terminate.load(Ordering::SeqCst) as i32;
         if signal != 0 {
@@ -72,6 +74,9 @@ pub fn run(
                 let mut input = [0; 256];
                 // At most one bounded read/frame: key/paste floods cannot starve
                 // the timer or turn into an unbounded input buffer.
+                if std::mem::take(&mut stop_before_read) {
+                    signal_hook::low_level::raise(SIGSTOP)?;
+                }
                 match io::Read::read(&mut s.input, &mut input) {
                     Ok(n) if n > 0 => {
                         if input[..n].contains(&3) {
@@ -89,6 +94,14 @@ pub fn run(
                         noticed_at = Some(Instant::now());
                     }
                     Ok(_) => (),
+                    Err(_) if !foreground() => {
+                        // Ownership can change between the check above and
+                        // read(2). With SIGTTIN blocked, that read returns EIO.
+                        // Relinquish the stale session without a diagnostic to
+                        // the new owner's tty; handle pending signals next tick.
+                        drop(session.take());
+                        continue;
+                    }
                     Err(e)
                         if matches!(
                             e.kind(),

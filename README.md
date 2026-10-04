@@ -49,15 +49,15 @@ bash install.sh                 # 菜单：发布版安装 / 卸载 / 本地编�
 bash install.sh install         # 下载脚本对应版本 / Download the script's release version
 bash install.sh uninstall       # 直接进入卸载确认 / Confirm uninstallation
 bash install.sh --help
-LOVELAOJI_VERSION=v0.4.0 bash install.sh install  # 指定版本 / Pin a version
+LOVELAOJI_VERSION=v0.4.1 bash install.sh install  # 指定版本 / Pin a version
 
 # 在源码 checkout 内，保留本地构建安装（需要 Rust/Cargo）
 # Source checkout only; local build installation still requires Rust/Cargo:
 ./install.sh install-local
 ```
 
-脚本当前默认 `v0.4.0`，不会静默追踪 latest。只有对应 Release 发布后才能下载；404 或网络失败会报错，不自动回退编译。需要固定脚本本身时，将 raw URL 的 `main` 换成对应标签（例如 `v0.4.0`）。
-The script defaults to `v0.4.0`, not a mutable latest release. Assets must be published first; missing releases/network failures are errors, never a silent source-build fallback. Replace `main` in the raw URL with a release tag to pin the script too.
+脚本当前默认 `v0.4.1`，不会静默追踪 latest。只有对应 Release 发布后才能下载；404 或网络失败会报错，不自动回退编译。需要固定脚本本身时，将 raw URL 的 `main` 换成对应标签（例如 `v0.4.1`）。
+The script defaults to `v0.4.1`, not a mutable latest release. Assets must be published first; missing releases/network failures are errors, never a silent source-build fallback. Replace `main` in the raw URL with a release tag to pin the script too.
 
 | 平台 / Platform | Release target | 系统基线 / OS baseline |
 | --- | --- | --- |
@@ -92,13 +92,13 @@ Before tagging, synchronize the workspace version, lockfile, installer default a
 
 ```sh
 # 确保版本尚未发布 / Use a version that has not already been published:
-git tag v0.4.0
-git push origin v0.4.0
+git tag v0.4.1
+git push origin v0.4.1
 
 # 可选：本机复现打包，不创建 GitHub Release
 # Optional native packaging; does not publish anything:
-bash scripts/package-release.sh v0.4.0 "$(rustc -vV | awk '/^host: / { print $2 }')"
-# 输出 / Output: dist/lovelaojicli-v0.4.0-<target>.tar.gz[.sha256]
+bash scripts/package-release.sh v0.4.1 "$(rustc -vV | awk '/^host: / { print $2 }')"
+# 输出 / Output: dist/lovelaojicli-v0.4.1-<target>.tar.gz[.sha256]
 ```
 
 ## 最小功能 / Features
@@ -230,8 +230,8 @@ afk 5m --color white          # 全白 / all white
 任务明文保存在状态根目录下 `one/tasks.json`，复用私有权限、原子写入、版本校验和非阻塞锁；完成即从列表删除，不保留完成历史，卸载保留状态。不要输入秘密；参数也可能进入 shell 历史/进程列表。duck/afk 不创建状态，不联网。第二批用法错误为 2，I/O/状态错误为 1，成功为 0；duck 无回答为 125。
 Tasks are local plaintext in `one/tasks.json` under the state root, with shared private permissions, atomic writes, version validation and nonblocking locks. Completion removes the task without history; uninstall preserves state. Do not enter secrets; CLI arguments can enter shell history/process lists. Duck/afk never create state; all three are offline. Usage errors return 2, I/O/state errors 1, success 0; duck without an answer returns 125.
 
-隐藏测试钩子（不在帮助中）：`ONE_SEED=<u64>` 固定同版本/候选顺序的随机选择，不影响任务 ID 或已有选中项；无效值忽略。`AFK_FAST=1` 将等待时长缩至 1%，不放宽时长校验；`AFK_TEST_FAILURE=enter|draw|panic` 仅在 TUI 模式注入初始化后失败/后端写错误/panic，未知值忽略，只用于隔离测试。
-Hidden test hooks (not in help): `ONE_SEED=<u64>` fixes random selection for the same version/candidate order, not task IDs or existing selections; invalid values are ignored. `AFK_FAST=1` scales waits to 1% without relaxing duration validation. `AFK_TEST_FAILURE=enter|draw|panic` injects post-entry/backend-write/panic failures in TUI mode only; unknown values are ignored, for isolated tests only.
+隐藏测试钩子（不在帮助中）：`ONE_SEED=<u64>` 固定同版本/候选顺序的随机选择，不影响任务 ID 或已有选中项；无效值忽略。`AFK_FAST=1` 将等待时长缩至 1%，不放宽时长校验；`AFK_TEST_FAILURE=enter|draw|panic` 在 TUI 模式注入初始化后失败/后端写错误/panic；`read-stop` 在前台检查后、首次读取输入前发送一次 SIGSTOP，由 PTY 控制器转移归属并继续进程以复现竞态。仅 TUI 模式有效，未知值忽略，只用于隔离测试。
+Hidden test hooks (not in help): `ONE_SEED=<u64>` fixes random selection for the same version/candidate order, not task IDs or existing selections; invalid values are ignored. `AFK_FAST=1` scales waits to 1% without relaxing duration validation. `AFK_TEST_FAILURE=enter|draw|panic` injects post-entry/backend-write/panic failures; `read-stop` raises SIGSTOP once between the foreground check and first input read so a PTY controller can transfer ownership and resume the process to reproduce the race. TUI mode only; unknown values are ignored, for isolated tests only.
 
 详解 / Deep dives: [duck](duck/README.md) · [中文](duck/README-zh.md)；[one](one/README.md) · [中文](one/README-zh.md)；[afk](afk/README.md) · [中文](afk/README-zh.md)。
 
