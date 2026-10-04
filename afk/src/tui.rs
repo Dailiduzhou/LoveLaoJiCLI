@@ -16,7 +16,11 @@ use terminal::{eligible, fault_name, foreground, viewport, Session};
 
 const FRAME: Duration = Duration::from_millis(100);
 
-pub fn run(wait: Duration, language: Language) -> Result<Option<i32>> {
+pub fn run(
+    wait: Duration,
+    language: Language,
+    color: super::scene::ColorMode,
+) -> Result<Option<i32>> {
     let start = Instant::now();
     if !eligible() {
         if let Some(left) = wait.checked_sub(start.elapsed()) {
@@ -24,7 +28,7 @@ pub fn run(wait: Duration, language: Language) -> Result<Option<i32>> {
         }
         return Ok(None);
     }
-    let palette = super::scene::Palette::detect();
+    let palette = super::scene::Palette::detect(color);
     // Registration and masks precede every terminal mutation. Reverse drop order
     // ensures a panicking Session restores termios before masks/handlers go away.
     let signals = Signals::new()?;

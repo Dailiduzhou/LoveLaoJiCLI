@@ -63,7 +63,7 @@ These are current boundaries, not promises that future features already exist.
 | Sprinkle 插入 / Insertion | 只考虑安全 EOF，固定 25% 选择、每文件最多一条、总计最多 100 条；不保证任意仓库可编译 / Conservative EOF-only comments, not a compilation guarantee |
 | Sprinkle 撤销 / Undo | 新提交、用户编辑、额外产物、身份/清单不确定时拒绝；未知中间态需人工检查；已完成清单作为已撤销记录保留 / Refuse uncertain deletion; some partial states need manual inspection; completed manifests remain as tombstones |
 | One 输入 / Input | 管道/文件读取等待 EOF，上限 1 MiB UTF-8、过滤后 1,000 项；不是完整 Markdown parser。持久化列表全局最多 1,000 项 / Bounded, EOF-terminated temporary input; one global persistent list |
-| Afk 终端 / Terminal | 同一前台 TTY、非空/non-dumb TERM、至少 24×10 时启用单色 TUI；其他启动环境安静降级。SIGKILL/外部 SIGSTOP/abort/终端断连无法保证恢复 / Foreground suitable-terminal TUI; conservative startup fallback; uncatchable/aborting/disconnected paths cannot guarantee cleanup |
+| Afk 终端 / Terminal | 同一前台 TTY、非空/non-dumb TERM、至少 24×10 时启用 TUI，支持分区色/彩虹/全白；其他启动环境安静降级。SIGKILL/外部 SIGSTOP/abort/终端断连无法保证恢复 / Foreground suitable-terminal TUI; conservative startup fallback; uncatchable/aborting/disconnected paths cannot guarantee cleanup |
 | 只读报告 / Read-only reports | Git/时区/记录不可用时显示未知，已有共享锁争用不写状态；不是全部 shell 命令审计日志 / Unavailable sources remain unknown; existing shared locks never create state; not a complete shell audit |
 | Proof 统计 / Counting | 当前 HEAD 可达、本地配置姓名与 email 精确匹配、按 committer 时间；合并计提交但不计补丁，重命名前后分路径；浅历史/超预算为未知 / Exact author/current HEAD/committer-day scope; merge patches excluded, raw rename paths, shallow/budget failures unknown |
 | 本地日期 / Local dates | 系统时区或 TZ，依赖本机 zoneinfo；不假定每天 24 小时，时区缺失不默认 UTC / System zone or TZ; host zoneinfo required; calendar days, no silent UTC fallback |
@@ -220,8 +220,9 @@ Persist one selected task until completion. Temporary input never opens or alter
 
 ### 4.3 afk — 不带惩罚的休息 / A break without penalties
 
-- 接口仍为 `afk <duration>`，正整数加小写 s/m/h、最多 24h；没有新业务参数。
-- 合适前台终端显示单色 ASCII 四阶段草地、太阳和剩余时间，最多 10 帧/秒、240×100 逻辑视口。普通按键显示 `the grass noticed.`（中文本地化）两秒；不计分、不延时、不重置。q/Esc 不作为退出键。
+- 接口为 `afk <duration> [--color rainbow|parts|white]`，时长为正整数加小写 s/m/h、最多 24h。按明确请求加入显示配色选项，默认 parts；NO_COLOR 优先于所有配色，降级输出不着色。
+  Color is an explicit display-only extension: default fixed component colors, animated rainbow bands, or all white; NO_COLOR wins.
+- 合适前台终端显示可选配色的 ASCII 四阶段草地、太阳和剩余时间，最多 10 帧/秒、240×100 逻辑视口。普通按键显示 `the grass noticed.`（中文本地化）两秒；不计分、不延时、不重置。q/Esc 不作为退出键。
 - stdin/stdout/stderr 必须为同一前台 TTY、TERM 非空且非 dumb、启动尺寸至少 24×10；否则安静等待，不监听键盘、不改变终端模式。运行中缩小时显示紧凑文本。
 - Ctrl+C 或 SIGINT/SIGTERM/SIGHUP/SIGQUIT 恢复后取消，无完成行；Ctrl+Z 恢复后挂起，原截止时刻继续推进。fg 可重入，bg 不读取或绘图。仍在前台时退出/挂起前丢弃排队 TUI 输入，不回放给 shell。
 - 保留信号的 cbreak-style 输入、完整 termios 快照、独立非阻塞 tty 读写、已有信号恢复测试；对不可捕捉信号/abort/终端失联只保留明确限制，不虚称绝对恢复。

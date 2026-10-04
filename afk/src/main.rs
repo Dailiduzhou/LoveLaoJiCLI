@@ -64,12 +64,24 @@ fn run() -> Result<Option<i32>> {
                 "正整数 + s/m/h（最多 24 小时）",
             )),
     )
+    .arg(
+        clap::Arg::new("color")
+            .long("color")
+            .value_name("MODE")
+            .value_parser(scene::ColorMode::parse)
+            .default_value("parts")
+            .help(l.text(
+                "Artwork colors: rainbow (moving bands), parts (fixed colors), white (all white); NO_COLOR overrides",
+                "字符画配色：rainbow（彩虹跑马灯）、parts（分区固定色）、white（全白）；NO_COLOR 优先",
+            )),
+    )
     .get_matches();
+    let color = *matches.get_one::<scene::ColorMode>("color").unwrap();
     let mut wait = *matches.get_one::<Duration>("duration").unwrap();
     if std::env::var("AFK_FAST").as_deref() == Ok("1") {
         wait /= 100;
     }
-    if let Some(signal) = tui::run(wait, l)? {
+    if let Some(signal) = tui::run(wait, l, color)? {
         return Ok(Some(signal));
     }
     writeln!(

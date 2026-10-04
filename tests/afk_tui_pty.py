@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
     env.pop("AFK_TEST_FAILURE", None)
 
     def run(action=None, fault=None, expected=0, term="xterm", dimensions=(18, 60),
-            duration="100s", chinese=False, suspend_for=None, no_color="1"):
+            duration="100s", chinese=False, suspend_for=None, no_color="1", color=None):
         master, slave = pty.openpty()
         if action == "flood":
             # Never block a paste past the injection window: a blocking write
@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
                 child_env["AFK_TEST_FAILURE"] = fault
             if chinese:
                 child_env["LC_ALL"] = "zh_CN"
-            os.execve(binary, [binary, duration], child_env)
+            os.execve(binary, [binary, duration] + (["--color", color] if color else []), child_env)
         output = b""
         start = time.monotonic()
         status = None
@@ -157,6 +157,18 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
     for no_color in (None, ""):
         out, _ = run(no_color=no_color)
         assert has_foreground_color(out), "scene should be colored by default"
+    for mode in ("rainbow", "parts", "white"):
+        out, _ = run(color=mode, no_color=None)
+        assert has_foreground_color(out), mode
+        if mode == "white":
+            # Crossterm emits ANSI white as indexed 15; resets are not colors.
+            sgr = re.findall(rb"\x1b\[([0-9;]*)m", out)
+            assert any(b"38;5;15" in codes for codes in sgr), sgr
+            assert all(code in (b"0", b"39", b"49", b"59", b"")
+                       for codes in sgr
+                       for code in codes.replace(b"38;5;15", b"").split(b";")), sgr
+        run(color=mode, no_color="1")  # NO_COLOR overrides explicit flags too.
+    run(action="ctrl-c", expected=-signal.SIGINT, duration="24h", no_color=None, color="rainbow")
     run(action="ctrl-c", expected=-signal.SIGINT, duration="24h", no_color=None)
 
     out, elapsed = run(action="keys")

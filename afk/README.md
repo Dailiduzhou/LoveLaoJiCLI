@@ -7,13 +7,35 @@ foreground terminal is available.
 afk 5m
 afk 30s
 afk 1h
+afk 5m --color rainbow
+afk 5m --color parts
+afk 5m --color white
 ```
 
 Duration remains ASCII decimal digits followed by lowercase `s`, `m` or `h`,
 positive and at most 24h. Leading zeros are accepted; signs, fractions, spaces,
-missing units, zero and overflow return 2. No new business flags or subcommands.
+missing units, zero and overflow return 2. The only display option is `--color`; no subcommands.
 Normal completion prints `Break complete.` after leaving the scene; I/O failures
 return 1. Ctrl+C cancels without a completion message (normally shell status 130).
+
+## Color modes
+
+`--color rainbow|parts|white` can appear before or after the duration:
+
+- `parts` (default): each artwork component keeps its fixed color, as before.
+- `rainbow`: a patience-like marquee of diagonal bright ANSI color bands moves
+  across the banner, clock, remaining-time caption and garden. Each band is four
+  columns wide; motion advances one column per 100 ms of elapsed time (2.4-second
+  cycle), independent of key presses or frame count. Prose/control hints stay in
+  the terminal default color; compact text on very small screens is unanimated.
+- `white`: all artwork and scene text use explicit ANSI white, not the terminal's
+  default foreground. The terminal theme still determines the exact shade.
+
+All modes preserve the artwork, layout, timer and default background. They use
+only the basic 16-color palette, without truecolor probing or new dependencies.
+A nonempty `NO_COLOR` overrides even an explicit `--color`: it uses the terminal
+**default foreground**, not forced white. Invalid/missing mode values return 2.
+Plain fallback never emits color escapes, regardless of mode.
 
 ## Scene and fallback
 
@@ -25,7 +47,7 @@ return 1. Ctrl+C cancels without a completion message (normally shell status 130
   scale squarely so slanted strokes stay 45°.
   A localized gentle or encouraging line rotates every
   eight seconds.
-  The banner is cyan, the clock bright cyan, grass green, sun/ground yellow,
+  In default `parts` mode the banner is cyan, the clock bright cyan, grass green, sun/ground yellow,
   and flowers pink with bright yellow centers. Only the basic 16-color palette
   is used, with the terminal's default background; exact shades follow its theme.
   Rendering is capped at 10 frames/second and a 240×100 logical viewport.
@@ -118,7 +140,8 @@ Hidden environment-only test hooks (never in help):
   values are ignored. For isolated tests, not normal use.
 
 `cargo test -p afk` includes TestBackend snapshots and Python-backed real PTYs:
-color/monochrome rendering and cleanup, completion, key floods, no deadline
+all three color modes, NO_COLOR precedence, spatial/time-based rainbow motion,
+white foreground, unchanged layout and cleanup, completion, key floods, no deadline
 extension or queued-input leakage, resize,
 Chinese output, Ctrl+C/SIGINT/SIGTERM/SIGHUP/SIGQUIT, setup/write/panic failures,
 Ctrl+Z/fg/bg, forced foreground transfer without stale cleanup, suspension past

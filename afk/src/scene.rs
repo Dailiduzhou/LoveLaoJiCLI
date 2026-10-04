@@ -1,7 +1,7 @@
 mod clock;
 mod layout;
 mod palette;
-pub(crate) use palette::Palette;
+pub(crate) use palette::{ColorMode, Palette};
 
 use cli_common::Language;
 use ratatui::{
@@ -179,7 +179,10 @@ pub fn draw(
     let remaining = format!("{} {time}", language.text("Remaining", "剩余"));
     let area = frame.area();
     if area.width < 24 || area.height < 10 {
-        frame.render_widget(Paragraph::new(format!("afk\n{remaining}\nCtrl+C")), area);
+        frame.render_widget(
+            Paragraph::new(format!("afk\n{remaining}\nCtrl+C")).style(palette.text),
+            area,
+        );
         return;
     }
     let layout::SceneLayout {
@@ -238,6 +241,7 @@ pub fn draw(
     );
     frame.render_widget(
         Paragraph::new(message(elapsed, language))
+            .style(palette.text)
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true }),
         comfort,
@@ -248,6 +252,7 @@ pub fn draw(
         } else {
             ""
         })
+        .style(palette.text)
         .alignment(Alignment::Center),
         notice,
     );
@@ -259,7 +264,13 @@ pub fn draw(
     } else {
         "Ctrl+C / Ctrl+Z"
     };
-    frame.render_widget(Paragraph::new(hint).alignment(Alignment::Center), controls);
+    frame.render_widget(
+        Paragraph::new(hint)
+            .style(palette.text)
+            .alignment(Alignment::Center),
+        controls,
+    );
+    palette.animate(frame.buffer_mut(), elapsed);
 }
 
 #[cfg(test)]
@@ -267,7 +278,14 @@ mod tests {
     use super::*;
     use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
     fn render(w: u16, h: u16, seconds: u64, noticed: bool, language: Language) -> Buffer {
-        render_with_palette(w, h, seconds, noticed, language, Palette::new(true))
+        render_with_palette(
+            w,
+            h,
+            seconds,
+            noticed,
+            language,
+            Palette::new(ColorMode::Parts, true),
+        )
     }
     fn render_with_palette(
         w: u16,
@@ -328,14 +346,69 @@ mod tests {
             for seconds in [0, 30, 60, 80] {
                 for language in [Language::English, Language::Chinese] {
                     let colored = render(w, h, seconds, true, language);
-                    let plain =
-                        render_with_palette(w, h, seconds, true, language, Palette::new(false));
+                    let plain = render_with_palette(
+                        w,
+                        h,
+                        seconds,
+                        true,
+                        language,
+                        Palette::new(ColorMode::Parts, false),
+                    );
                     assert_eq!(text(&colored), text(&plain));
                     assert!(plain
                         .content
                         .iter()
                         .all(|cell| cell.fg == Color::Reset && cell.bg == Color::Reset));
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn color_modes_preserve_layout_and_white_covers_all_visible_text() {
+        use ratatui::style::Color;
+        for (w, h) in [(0, 0), (12, 3), (24, 10), (80, 24), (120, 70)] {
+            for language in [Language::English, Language::Chinese] {
+                let parts = render(w, h, 80, true, language);
+                for mode in [ColorMode::Rainbow, ColorMode::White] {
+                    let colored =
+                        render_with_palette(w, h, 80, true, language, Palette::new(mode, true));
+                    let plain =
+                        render_with_palette(w, h, 80, true, language, Palette::new(mode, false));
+                    assert_eq!(text(&parts), text(&colored));
+                    assert_eq!(text(&parts), text(&plain));
+                    assert!(colored.content.iter().all(|cell| cell.bg == Color::Reset));
+                    assert!(plain.content.iter().all(|cell| cell.fg == Color::Reset));
+                    if mode == ColorMode::White {
+                        assert!(colored
+                            .content
+                            .iter()
+                            .filter(|cell| cell.symbol() != " ")
+                            .all(|cell| cell.fg == Color::White));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rainbow_moves_across_the_banner_but_not_the_hints() {
+        let palette = Palette::new(ColorMode::Rainbow, true);
+        let a = render_with_palette(120, 70, 80, false, Language::English, palette);
+        let b = render_with_palette(120, 70, 81, false, Language::English, palette);
+        let layout = layout::SceneLayout::new(Rect::new(0, 0, 120, 70), 5, width(&REMAINING));
+        assert!(layout.banner);
+        let mut changed = false;
+        for y in layout.title.y..layout.title.bottom() {
+            for x in layout.title.x..layout.title.right() {
+                assert_eq!(a[(x, y)].symbol(), b[(x, y)].symbol());
+                changed |= a[(x, y)].fg != b[(x, y)].fg;
+            }
+        }
+        assert!(changed);
+        for y in layout.controls.y..layout.controls.bottom() {
+            for x in layout.controls.x..layout.controls.right() {
+                assert_eq!(a[(x, y)].fg, ratatui::style::Color::Reset);
             }
         }
     }

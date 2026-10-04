@@ -5,7 +5,7 @@ support zh-CN and en-US. change display language according to locale (LC_ALL -> 
 share locale detection and clap scaffolding in `cli-common/`.
 
 dependencies: clap/rand plus narrowly scoped serde/serde_json (records), blake3 (stable keyed fingerprints), and rustix (Unix ownership/foreground and stdin-type checks) are allowed for all three batches. jiff is additionally allowed only for goodnight/proof local dates and DST boundaries, through the optional cli-common/local-time feature (std/tz-system/tzdb-zoneinfo; no bundled database). For afk only, ratatui (default features off, crossterm_0_29), signal-hook (signal flags), and libc (scoped Unix job-control signal masks) are additionally allowed after terminal-lifecycle evaluation. rustix may snapshot/restore afk termios. Prefer std for everything else. workspace version stays in sync across all crates.
-love/happiness/joy keep only basic flags. New tools support only the MVP business arguments in project.md part 2. Test hooks are environment variables, documented in README, never in `--help`.
+love/happiness/joy keep only basic flags. New tools support only the MVP business arguments in project.md part 2, plus the explicitly requested afk `--color rainbow|parts|white` display option. Test hooks are environment variables, documented in README, never in `--help`.
 
 tools (status):
 1. love - one localized blessing. (done)
@@ -27,6 +27,7 @@ tools (status):
 10. one - global local tasks, stable selection until done; isolated piped selection. (done)
 11. afk - monotonic break timer, Ratatui grass scene/key notice, conservative plain fallback. (done)
    - afk owns termios/alternate-screen restoration, foreground checks and Ctrl+Z/fg/bg lifecycle.
+   - afk --color defaults to parts; rainbow animates artwork, white uses ANSI white. Nonempty NO_COLOR overrides all modes; plain fallback stays uncolored.
    - no crossterm raw mode/event loop or cursor queries; cbreak keeps terminal signals.
    - Ratatui/signal-hook/libc are scoped to afk; duck/one keep their existing dependencies.
    - one state failures fail closed; duck/afk never open state.
