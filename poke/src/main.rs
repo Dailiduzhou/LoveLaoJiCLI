@@ -63,9 +63,13 @@ fn run() -> Result<()> {
             command(name, l.text(en, zh)).arg(
                 clap::Arg::new("name")
                     .required(true)
-                    .value_parser(|s: &str| {
+                    .value_parser(move |s: &str| {
                         text_input(s, MAX_NAME).ok_or_else(|| {
-                            "Expected a nonempty single line, at most 200 characters".to_owned()
+                            l.text(
+                                "Expected a nonempty single line, at most 200 characters",
+                                "请输入非空单行文本，最多 200 个字符",
+                            )
+                            .to_owned()
                         })
                     })
                     .help(l.text(

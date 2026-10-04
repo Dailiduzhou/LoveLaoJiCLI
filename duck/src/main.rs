@@ -33,9 +33,13 @@ fn run() -> Result<i32> {
             clap::Arg::new(name)
                 .long(name)
                 .value_name("text")
-                .value_parser(|s: &str| {
+                .value_parser(move |s: &str| {
                     text_input(s, 2000).ok_or_else(|| {
-                        "Expected a nonempty single line, at most 2000 characters".to_owned()
+                        l.text(
+                            "Expected a nonempty single line, at most 2000 characters",
+                            "请输入非空单行文本，最多 2000 个字符",
+                        )
+                        .to_owned()
                     })
                 })
                 .help(l.text(en, zh)),

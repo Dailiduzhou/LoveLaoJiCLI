@@ -27,6 +27,12 @@ sent over the network (only bounded local Git probes run).
   counts. Tab/newline/non-UTF-8 filenames are parsed with NUL delimiters and are
   not printed. External diff, textconv, signature display, hooks and lazy network
   fetching are disabled for the relevant probes.
+- Each patch reads `.gitattributes` from that specific commit via Git's
+  `--attr-source`, not the working tree or index; global/system attribute files
+  are disabled. Existing `info/attributes` in the common Git directory makes
+  Git evidence unknown, since Git provides no switch to disable that override.
+  Git versions without `--attr-source` also return unknown when a patch is needed;
+  there is no fallback to mutable attributes. No temporary worktree/index is created.
 - Shallow history, missing objects, missing Git/HEAD, changed HEAD while collecting,
   invalid output or exceeded budgets makes the whole Git source unknown, never a
   partial number. Unborn/bare repositories currently have unknown Git evidence.
@@ -85,6 +91,7 @@ python3 tests/report_records_pty.py target/release
 ```
 
 Tests cover DST, author/time/reachability, merge/root/binary/rename statistics,
-record validation, locks, read-only behavior and actual wrapper executions/skips/gates.
+record validation, locks, read-only behavior, per-commit attribute isolation (including
+linked worktrees and unsupported Git), and actual wrapper executions/skips/gates.
 macOS/WSL, every historical timezone anomaly and full resource-fault injection are
 not claimed as verified.

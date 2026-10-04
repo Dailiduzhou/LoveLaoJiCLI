@@ -37,6 +37,10 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
     def run(action=None, fault=None, expected=0, term="xterm", dimensions=(18, 60),
             duration="100s", chinese=False, suspend_for=None, no_color="1"):
         master, slave = pty.openpty()
+        if action == "flood":
+            # Never block a paste past the injection window: a blocking write
+            # can resume after afk's final flush and inject new input at the shell.
+            os.set_blocking(master, False)
         size(slave, *dimensions)
         original = termios.tcgetattr(slave)
         # Verify exact restoration of non-default attributes, not merely ECHO on.
@@ -96,7 +100,10 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
                         os.kill(pid, action)
                     acted = True
                 if action == "flood" and ENTER in output and elapsed < .8:
-                    os.write(master, b"x" * 100)
+                    try:
+                        os.write(master, b"x" * 100)
+                    except BlockingIOError:
+                        pass
                 if resume_at is not None and time.monotonic() >= resume_at:
                     assert termios.tcgetattr(slave) == original
                     os.kill(pid, signal.SIGCONT)

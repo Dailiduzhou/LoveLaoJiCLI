@@ -98,6 +98,12 @@ have managed cleanup. A disconnected/unwritable terminal may reject restoration
 or screen/cursor escape sequences; cleanup is best-effort in that case, not a
 promise to repair a terminal that no longer exists. Unexpected terminal ownership
 changes are detected between frames, not an atomic lease against other programs.
+If foreground ownership is lost (or cannot be confirmed), cleanup abandons its
+old snapshot: it does not flush input, restore termios or emit screen/cursor
+escapes into the new owner's terminal, including from Ratatui/guard destruction.
+This means forced ownership transfer cannot guarantee restoration of afk's old
+screen/settings; normal Ctrl+Z still restores before stopping. Foreground reentry
+captures a fresh snapshot.
 
 ## Language, hooks and tests
 
@@ -115,7 +121,8 @@ Hidden environment-only test hooks (never in help):
 color/monochrome rendering and cleanup, completion, key floods, no deadline
 extension or queued-input leakage, resize,
 Chinese output, Ctrl+C/SIGINT/SIGTERM/SIGHUP/SIGQUIT, setup/write/panic failures,
-Ctrl+Z/fg/bg, suspension past the deadline, dumb/small/redirected fallback and exact
+Ctrl+Z/fg/bg, forced foreground transfer without stale cleanup, suspension past
+the deadline, dumb/small/redirected fallback and exact
 termios restoration. Tests also reject accidental cursor-position queries.
 
 Linux validated. macOS/WSL, native terminal-emulator visual checks and every I/O

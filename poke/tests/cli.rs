@@ -179,3 +179,14 @@ fn global_scope_locale_priority_and_non_utf8_state_path() {
     code(&o, 0);
     assert_eq!(text(&o.stdout), "If you like, say hello to: 朋友\n");
 }
+
+#[test]
+fn invalid_arguments_follow_locale_priority() {
+    let f = Fixture::new(BIN, false);
+    localized_usage_error(
+        &f,
+        &["add", ""],
+        "Expected a nonempty single line, at most 200 characters",
+        "请输入非空单行文本，最多 200 个字符",
+    );
+}

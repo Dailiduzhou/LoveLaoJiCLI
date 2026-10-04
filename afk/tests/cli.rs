@@ -96,3 +96,27 @@ fn non_utf8_cwd_and_english_locale_override() {
     code(&o, 0);
     assert_eq!(text(&o.stdout), "Break complete.\n");
 }
+
+#[test]
+fn invalid_arguments_follow_locale_priority() {
+    let f = Fixture::new(BIN, false);
+    localized_usage_error(
+        &f,
+        &["nope"],
+        "Expected a positive integer followed by s/m/h, at most 24h",
+        "请输入正整数加 s/m/h，最多 24 小时",
+    );
+}
+
+#[test]
+fn ownership_loss_preserves_new_foreground_settings_and_screen() {
+    let status = std::process::Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../tests/afk_ownership_pty.py"
+        ))
+        .arg(BIN)
+        .status()
+        .unwrap();
+    assert!(status.success());
+}

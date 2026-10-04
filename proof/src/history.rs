@@ -32,8 +32,19 @@ fn identity(repo: &Repo, field: &str) -> Result<Vec<u8>> {
     }
     Ok(value)
 }
+// --attr-source pins tree attributes, but Git still gives info/attributes
+// precedence. There is no per-command switch to disable that file. Refuse it
+// rather than let mutable local overrides reinterpret committed evidence.
+fn check_local_attributes(repo: &Repo) -> Result<()> {
+    match std::fs::symlink_metadata(repo.common.join("info/attributes")) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+        Ok(_) => Err(invalid()),
+    }
+}
 pub fn collect(repo: &Repo, day: &LocalDay) -> Result<Totals> {
     let start = Instant::now();
+    check_local_attributes(repo)?;
     if git::run(&repo.root, ["rev-parse", "--is-shallow-repository"])? != b"false\n" {
         return Err(invalid());
     }
@@ -92,25 +103,32 @@ pub fn collect(repo: &Repo, day: &LocalDay) -> Result<Totals> {
         {
             continue;
         }
-        // Rename detection deliberately off: old/new names count as distinct raw
-        // paths. No external diff/textconv/filter execution; binaries have no LOC.
-        let stat = git::run(
-            &repo.root,
-            [
-                "-c",
-                "diff.algorithm=myers",
-                "diff-tree",
-                "--root",
-                "--no-commit-id",
-                "--numstat",
-                "-r",
-                "-z",
-                "--no-renames",
-                "--no-ext-diff",
-                "--no-textconv",
-                id,
-                "--",
-            ],
+        // Use each commit's attributes, not today's working tree/index. The
+        // global option fails closed on Git versions without --attr-source;
+        // an environment-only override would be silently ignored by old Git.
+        // Global/system attribute files must not override the pinned tree.
+        check_local_attributes(repo)?;
+        let stat = git::output(
+            git::command(&repo.root)
+                .env("GIT_ATTR_NOSYSTEM", "1")
+                .arg(format!("--attr-source={id}"))
+                .args([
+                    "-c",
+                    "core.attributesFile=/dev/null",
+                    "-c",
+                    "diff.algorithm=myers",
+                    "diff-tree",
+                    "--root",
+                    "--no-commit-id",
+                    "--numstat",
+                    "-r",
+                    "-z",
+                    "--no-renames",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    id,
+                    "--",
+                ]),
         )?;
         stat_bytes = stat_bytes.saturating_add(stat.len());
         if stat_bytes > 32 * 1024 * 1024 {
@@ -118,6 +136,7 @@ pub fn collect(repo: &Repo, day: &LocalDay) -> Result<Totals> {
         }
         add_stat(&mut totals, &stat)?;
     }
+    check_local_attributes(repo)?;
     if start.elapsed() > Duration::from_secs(10)
         || git::run(&repo.root, ["rev-parse", "--verify", "HEAD"])?
             != format!("{}\n", repo.head).as_bytes()

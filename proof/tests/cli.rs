@@ -268,3 +268,77 @@ fn renames_count_raw_paths_and_shallow_history_is_unknown() {
     code(&o, 0);
     assert!(text(&o.stdout).contains("Git evidence (repository/author/history): unknown"));
 }
+
+#[test]
+fn attributes_are_pinned_per_commit_not_worktree_index_or_global_files() {
+    let f = Fixture::new(BIN, true);
+    let clean = run(&f);
+    code(&clean, 0);
+    assert!(
+        text(&clean.stdout).contains("+1 / -0; unique paths: 1; binary paths, no line count: 0")
+    );
+    // Untracked, then staged, then dirty attributes must not reinterpret HEAD.
+    let attrs = f.repo.join(".gitattributes");
+    fs::write(&attrs, "*.rs -diff\n").unwrap();
+    assert_eq!(run(&f).stdout, clean.stdout);
+    f.git(&["add", ".gitattributes"]);
+    assert_eq!(run(&f).stdout, clean.stdout);
+    fs::write(&attrs, "* -diff\n").unwrap();
+    let global = f.root.join("attributes");
+    fs::write(&global, "* -diff\n").unwrap();
+    f.git(&["config", "core.attributesFile", global.to_str().unwrap()]);
+    let before = snapshot(&f.root);
+    assert_eq!(run(&f).stdout, clean.stdout);
+    assert_eq!(snapshot(&f.root), before);
+
+    // Committed attributes ARE respected, but only for that commit: the first
+    // commit's text line must still count after the next commit marks it binary.
+    fs::write(&attrs, "*.rs -diff\n").unwrap();
+    fs::write(f.repo.join("code.rs"), "changed\nanother line\n").unwrap();
+    commit(&f, ("Test", "test@localhost"), state::now(), state::now());
+    let before = snapshot(&f.root);
+    let o = f
+        .cmd()
+        .env("TZ", "UTC")
+        .env("GIT_ATTR_SOURCE", "HEAD~1")
+        .output()
+        .unwrap();
+    code(&o, 0);
+    assert!(
+        text(&o.stdout).contains("+2 / -0; unique paths: 2; binary paths, no line count: 1"),
+        "{}",
+        text(&o.stdout)
+    );
+    assert_eq!(snapshot(&f.root), before);
+}
+
+#[test]
+fn local_attribute_overrides_are_unknown_in_main_and_linked_worktrees() {
+    let f = Fixture::new(BIN, true);
+    let other = f.root.join("other");
+    f.git(&["worktree", "add", "-qb", "other", other.to_str().unwrap()]);
+    fs::write(f.repo.join(".git/info/attributes"), "* -diff\n").unwrap();
+    let before = snapshot(&f.root);
+    for cwd in [&f.repo, &other] {
+        let o = f.cmd().current_dir(cwd).env("TZ", "UTC").output().unwrap();
+        code(&o, 0);
+        assert!(text(&o.stdout).contains("Git evidence (repository/author/history): unknown"));
+    }
+    assert_eq!(snapshot(&f.root), before);
+}
+
+#[test]
+fn unsupported_attribute_source_never_falls_back_to_mutable_attributes() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new(BIN, true);
+    let bin = f.root.join("bin");
+    fs::create_dir(&bin).unwrap();
+    let git = bin.join("git");
+    fs::write(&git, b"#!/bin/sh\nfor arg do\n case \"$arg\" in --attr-source=*) exit 129;; esac\ndone\nPATH=/usr/bin:/bin exec git \"$@\"\n").unwrap();
+    fs::set_permissions(&git, fs::Permissions::from_mode(0o755)).unwrap();
+    let before = snapshot(&f.root);
+    let o = f.cmd().env("PATH", bin).env("TZ", "UTC").output().unwrap();
+    code(&o, 0);
+    assert!(text(&o.stdout).contains("Git evidence (repository/author/history): unknown"));
+    assert_eq!(snapshot(&f.root), before);
+}

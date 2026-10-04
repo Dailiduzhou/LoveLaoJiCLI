@@ -151,3 +151,26 @@ pub fn basics(bin: &'static str, tool: &str) {
     }
     code(&f.run(&["--unknown"]), 2);
 }
+
+/// Custom validation diagnostics follow the same locale priority as help.
+pub fn localized_usage_error(f: &Fixture, args: &[&str], english: &str, chinese: &str) {
+    for (all, messages, lang, expected) in [
+        ("en_US", "zh_CN", "zh_CN", english),
+        ("zh_CN", "en_US", "en_US", chinese),
+        ("", "zh_CN", "en_US", chinese),
+        ("", "", "zh-CN", chinese),
+    ] {
+        let o = f
+            .cmd()
+            .env("LC_ALL", all)
+            .env("LC_MESSAGES", messages)
+            .env("LANG", lang)
+            .args(args)
+            .output()
+            .unwrap();
+        code(&o, 2);
+        assert!(o.stdout.is_empty());
+        assert!(text(&o.stderr).contains(expected), "{}", text(&o.stderr));
+    }
+    assert_eq!(fs::read_dir(&f.state).unwrap().count(), 0);
+}

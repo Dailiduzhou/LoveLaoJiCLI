@@ -134,6 +134,12 @@ pub(super) struct ScreenWriter {
 }
 impl io::Write for ScreenWriter {
     fn write(&mut self, bytes: &[u8]) -> Result<usize> {
+        // Ratatui's Drop also writes (show cursor). Silently discard those
+        // writes after ownership loss; even a cleanup diagnostic would disturb
+        // the new foreground job. Reentry gets a fresh backend and snapshot.
+        if !termios::tcgetpgrp(&self.file).is_ok_and(|p| p == rustix::process::getpgrp()) {
+            return Ok(bytes.len());
+        }
         if self.fail.load(Ordering::SeqCst) {
             return Err(io::Error::other("AFK_TEST_FAILURE=draw"));
         }
@@ -169,16 +175,18 @@ impl ModeGuard {
         Ok(())
     }
     pub(super) fn restore(&mut self) -> Result<()> {
+        if !termios::tcgetpgrp(&self.tty).is_ok_and(|p| p == rustix::process::getpgrp()) {
+            // The new owner may already have installed its own settings/screen.
+            // Relinquish this snapshot, including Drop retries; never apply it
+            // later merely because we regain foreground ownership.
+            self.changed = false;
+            self.screen = false;
+            return Ok(());
+        }
         let attrs = if self.changed {
-            // Do not pass queued TUI keys/paste back to the shell. Never flush
-            // another foreground job's input if ownership has already changed.
-            let pending = if termios::tcgetpgrp(&self.tty)
-                .is_ok_and(|p| p == rustix::process::getpgrp())
-            {
-                termios::tcflush(&self.tty, termios::QueueSelector::IFlush).map_err(io::Error::from)
-            } else {
-                Ok(())
-            };
+            // Do not pass queued TUI keys/paste back to the shell.
+            let pending = termios::tcflush(&self.tty, termios::QueueSelector::IFlush)
+                .map_err(io::Error::from);
             let result = termios::tcsetattr(&self.tty, OptionalActions::Now, &self.saved)
                 .map_err(io::Error::from);
             if result.is_ok() {

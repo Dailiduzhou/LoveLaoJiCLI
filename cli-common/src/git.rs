@@ -72,8 +72,12 @@ fn collect(mut r: impl Read) -> Result<Vec<u8>> {
     Ok(b)
 }
 pub fn run(cwd: &Path, args: impl IntoIterator<Item = impl AsRef<OsStr>>) -> Result<Vec<u8>> {
-    let mut child = command(cwd)
-        .args(args)
+    output(command(cwd).args(args))
+}
+/// Collect a configured local Git probe with the same stream/time budgets as
+/// `run`. Callers start with `command` to retain its offline safety settings.
+pub fn output(command: &mut Command) -> Result<Vec<u8>> {
+    let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;

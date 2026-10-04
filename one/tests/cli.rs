@@ -252,3 +252,14 @@ fn adding_preserves_selection_and_concurrent_readers_agree() {
     code(&saved, 0);
     assert!(selections.iter().all(|s| *s == saved.stdout));
 }
+
+#[test]
+fn invalid_arguments_follow_locale_priority() {
+    let f = Fixture::new(BIN, false);
+    localized_usage_error(
+        &f,
+        &["add", ""],
+        "Expected a nonempty single line, at most 2000 characters",
+        "请输入非空单行文本，最多 2000 个字符",
+    );
+}

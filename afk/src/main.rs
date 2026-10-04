@@ -5,7 +5,14 @@ use std::io::{self, Write};
 use std::time::Duration;
 
 fn duration(s: &str) -> std::result::Result<Duration, String> {
-    let invalid = || "Expected a positive integer followed by s/m/h, at most 24h".to_owned();
+    let invalid = || {
+        Language::detect()
+            .text(
+                "Expected a positive integer followed by s/m/h, at most 24h",
+                "请输入正整数加 s/m/h，最多 24 小时",
+            )
+            .to_owned()
+    };
     let multiplier = match s.as_bytes().last() {
         Some(b's') => 1,
         Some(b'm') => 60,
