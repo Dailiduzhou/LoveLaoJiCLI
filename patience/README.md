@@ -31,7 +31,7 @@ When the command itself starts with `--` (e.g. `patience -- git status`), one `-
 
 ## The random show
 
-Each run picks one of six speed curves at random: linear, ease-in, ease-out, sigmoid, stepped (like a badly written installer), exponential (looks busy, never quite arrives).
+Each run picks one of seven speed curves at random: linear, ease-in, ease-out, sigmoid, stepped (like a badly written installer), exponential (looks busy, never quite arrives), square-root (fast off the line, then a long slow creep).
 
 The script alternates climbs with 1..=4 short stalls (0.5–2s), stall points strictly increasing and at least 3% apart, ending in an **eternal hold** at 97–99.9%: as long as the child lives, the bar never moves again.
 
@@ -65,3 +65,5 @@ Everything is environment variables, never in `--help`.
 | `PATIENCE_FAST=1` | scales every timing to 1% |
 | `PATIENCE_COLOR=truecolor\|256\|16\|none` | force a color level, overriding detection |
 | `PATIENCE_ANGLE=<0..90>` | band boundary angle, 45° by default |
+
+Seeded shows are reproducible within one version, not across versions: adding a variant to `Curve::ALL` changes how the seed maps onto the curve list, so the same `PATIENCE_SEED` picks a different show afterwards.

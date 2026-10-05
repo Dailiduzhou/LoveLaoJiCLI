@@ -49,15 +49,15 @@ bash install.sh                 # 菜单：发布版安装 / 卸载 / 本地编�
 bash install.sh install         # 下载脚本对应版本 / Download the script's release version
 bash install.sh uninstall       # 直接进入卸载确认 / Confirm uninstallation
 bash install.sh --help
-LOVELAOJI_VERSION=v0.4.2 bash install.sh install  # 指定版本 / Pin a version
+LOVELAOJI_VERSION=v0.5.0 bash install.sh install  # 指定版本 / Pin a version
 
 # 在源码 checkout 内，保留本地构建安装（需要 Rust/Cargo）
 # Source checkout only; local build installation still requires Rust/Cargo:
 ./install.sh install-local
 ```
 
-脚本当前默认 `v0.4.2`，不会静默追踪 latest。只有对应 Release 发布后才能下载；404 或网络失败会报错，不自动回退编译。需要固定脚本本身时，将 raw URL 的 `main` 换成对应标签（例如 `v0.4.2`）。
-The script defaults to `v0.4.2`, not a mutable latest release. Assets must be published first; missing releases/network failures are errors, never a silent source-build fallback. Replace `main` in the raw URL with a release tag to pin the script too.
+脚本当前默认 `v0.5.0`，不会静默追踪 latest。只有对应 Release 发布后才能下载；404 或网络失败会报错，不自动回退编译。需要固定脚本本身时，将 raw URL 的 `main` 换成对应标签（例如 `v0.5.0`）。
+The script defaults to `v0.5.0`, not a mutable latest release. Assets must be published first; missing releases/network failures are errors, never a silent source-build fallback. Replace `main` in the raw URL with a release tag to pin the script too.
 
 | 平台 / Platform | Release target | 系统基线 / OS baseline |
 | --- | --- | --- |
@@ -115,8 +115,8 @@ love、happiness、joy 不提供子命令或其他参数。No subcommands or add
 `patience <command> [args...]` 像工具那样运行一个真实命令，并给它演出一条假进度条：
 `patience <command> [args...]` runs a real command and performs a fake progress bar show around it:
 
-- 每次运行随机选择一种速度曲线（匀速、先慢后快、先快后慢、S 型、阶梯式、指数逼近）。
-  Each run picks one random speed curve (linear, ease-in, ease-out, sigmoid, stepped, exponential).
+- 每次运行随机选择一种速度曲线（匀速、先慢后快、先快后慢、S 型、阶梯式、指数逼近、平方根）。
+  Each run picks one random speed curve (linear, ease-in, ease-out, sigmoid, stepped, exponential, square-root).
 - 多次爬升与短卡，随后停在 97%~99.9%；只要子命令还没退出，进度条就永不再动。
   Multiple climbs and short stalls, then a hold at 97–99.9%; the bar never moves again until the child exits.
 - 子命令成功退出时快速填满到 100%；失败则停在原地，绝不填满。

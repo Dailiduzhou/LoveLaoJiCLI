@@ -20,15 +20,18 @@ pub enum Curve {
     Stepped,
     /// Gains shrink as it goes; looks busy but never quite arrives.
     Exponential,
+    /// Square root of time: fast off the line, then a long slow creep.
+    Sqrt,
 }
 
-pub const ALL: [Curve; 6] = [
+pub const ALL: [Curve; 7] = [
     Curve::Linear,
     Curve::EaseIn,
     Curve::EaseOut,
     Curve::Sigmoid,
     Curve::Stepped,
     Curve::Exponential,
+    Curve::Sqrt,
 ];
 
 impl Curve {
@@ -47,6 +50,7 @@ impl Curve {
             Curve::Sigmoid => t * t * (3.0 - 2.0 * t),
             Curve::Stepped => (t * 6.0).floor() / 6.0,
             Curve::Exponential => (1.0 - (-4.0 * t).exp()) / (1.0 - (-4.0_f64).exp()),
+            Curve::Sqrt => t.sqrt(),
         }
     }
 }
@@ -84,5 +88,29 @@ mod tests {
         assert!(Curve::EaseIn.apply(0.5) < Curve::Linear.apply(0.5));
         assert!(Curve::Linear.apply(0.5) < Curve::EaseOut.apply(0.5));
         assert!(Curve::Stepped.apply(0.5) < Curve::Exponential.apply(0.5));
+        // Sqrt sits between Linear and EaseOut: still an ease-out, but a
+        // gentler one. Two curves sharing a midpoint would be one curve.
+        assert!(Curve::Linear.apply(0.5) < Curve::Sqrt.apply(0.5));
+        assert!(Curve::Sqrt.apply(0.5) < Curve::EaseOut.apply(0.5));
+    }
+
+    #[test]
+    fn sqrt_curve_is_wired_up_and_pinned() {
+        assert!(
+            ALL.contains(&Curve::Sqrt),
+            "Sqrt must be reachable by pick()"
+        );
+        // apply(t)^2 == t is the curve's defining property, so check it as a
+        // relative error across the range instead of comparing the curve
+        // against the same expression it is implemented with. A literal
+        // f64::EPSILON would be only two ULPs at this magnitude.
+        for step in 1..=9 {
+            let t = step as f64 / 10.0;
+            let squared = Curve::Sqrt.apply(t).powi(2);
+            let error = (squared - t).abs();
+            assert!(error < 1e-12, "t={t}: squared error {error}");
+        }
+        // 0.25 is 2^-2, so its square root is exactly representable.
+        assert_eq!(Curve::Sqrt.apply(0.25), 0.5);
     }
 }

@@ -13,7 +13,7 @@ TOOLS=(love happiness joy patience sprinkle later enough stuck duck one afk good
 RC_FILES=()
 TEMP_FILE=''
 DOWNLOAD_DIR=''
-RELEASE_VERSION=${LOVELAOJI_VERSION:-v0.4.2}
+RELEASE_VERSION=${LOVELAOJI_VERSION:-v0.5.0}
 REPOSITORY='https://github.com/Dailiduzhou/LoveLaoJiCLI'
 cleanup() {
   if [[ -n "$TEMP_FILE" ]]; then rm -f -- "$TEMP_FILE"; fi
