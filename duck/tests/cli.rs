@@ -105,9 +105,9 @@ fn foreground_questions_and_cancellation() {
     let status = std::process::Command::new("python3")
         .arg(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../tests/batch_two_pty.py"
+            "/tests/foreground_pty.py"
         ))
-        .args([BIN, "duck"])
+        .arg(BIN)
         .status()
         .unwrap();
     assert!(status.success());

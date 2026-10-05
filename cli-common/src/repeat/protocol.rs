@@ -2,7 +2,7 @@
 use super::{
     current,
     records::{prune, Run},
-    RETENTION,
+    Decision, Policy, RETENTION,
 };
 use crate::{
     display, error,
@@ -21,13 +21,13 @@ use std::{
 };
 
 #[derive(Serialize, Deserialize, Clone)]
-struct Baseline {
+pub struct Baseline {
     run_id: String,
     invocation: String,
     snapshot: String,
-    completed_at: u64,
-    signature: String,
-    count: u32,
+    pub completed_at: u64,
+    pub signature: String,
+    pub count: u32,
 }
 #[derive(Serialize, Deserialize, Default)]
 struct Repeat {
@@ -159,10 +159,9 @@ impl Context {
     /// Returns an early code only for an authenticated skip/interception.
     pub(super) fn begin(
         &mut self,
-        again: bool,
+        policy: &impl Policy,
         mut hypothesis: Option<String>,
     ) -> Result<Option<i32>> {
-        let l = Language::detect();
         let write_lock = state::lock(&self.dir.join("workspace.lock"))?;
         state::private_dir(&self.dir.join("runs"))?;
         prune(&self.store, &self.dir)?;
@@ -181,68 +180,56 @@ impl Context {
             && prior.as_ref().is_some_and(|b| {
                 b.invocation == self.invocation && Some(&b.snapshot) == self.before.as_ref()
             });
-        if self.run.tool == "enough"
-            && matches
-            && !again
-            && prior.as_ref().is_some_and(|b| current(b.completed_at, 300))
-        {
-            let b = repeat.baseline.as_mut().unwrap();
-            b.count = b.count.saturating_add(1);
-            let count = b.count;
-            self.store.write(&self.state_path(), &repeat)?;
-            let en = ["It already passed.", "Nothing changed.", "enough.", "no."];
-            let zh = ["已经通过了。", "没有观察到变化。", "够了。", "不必了。"];
-            eprintln!(
-                "{}",
-                l.text(
-                    en[(count.min(4) - 1) as usize],
-                    zh[(count.min(4) - 1) as usize]
-                )
-            );
-            return Ok(Some(0));
-        }
-        if self.run.tool == "stuck"
-            && matches
-            && prior.as_ref().is_some_and(|b| b.count >= 3)
-            && hypothesis.is_none()
-        {
-            eprintln!(
-                "{}",
-                l.text(
-                    "Nothing changed. Repeating the same experiment may produce the same result.",
-                    "没有观察到变化。重复同一实验可能产生相同结果。"
-                )
-            );
-            // Do not hold the write lock while asking. An execution lease prevents another
-            // instance from regarding this interval as an unambiguous sequential sample.
-            let observed = repeat.generation.clone();
-            drop(write_lock);
-            hypothesis = process::ask(
-                l.text("What are you changing?", "这次你打算改变什么？"),
-                512,
-            )?;
-            let _lock = state::lock(&self.dir.join("workspace.lock"))?;
-            let latest = self.read_repeat()?;
-            if latest.generation != observed {
-                return Err(error(
-                    "Concurrent invocation changed the repeat state",
-                    "并发调用改变了重复状态",
-                ));
+        let decision = if matches {
+            policy.before(prior.as_ref(), hypothesis.as_deref())
+        } else {
+            Decision::Run
+        };
+        match decision {
+            Decision::Skip {
+                count,
+                code,
+                message,
+            } => {
+                let b = repeat
+                    .baseline
+                    .as_mut()
+                    .expect("skip requires a matched baseline");
+                b.count = count;
+                self.store.write(&self.state_path(), &repeat)?;
+                eprintln!("{message}");
+                return Ok(Some(code));
             }
-            if hypothesis.is_none() {
-                eprintln!(
-                    "{}",
-                    l.text(
-                        "Not run. Supply --hypothesis <text> (no secrets).",
-                        "未执行。请提供 --hypothesis <text>（不要填写秘密）。"
-                    )
-                );
-                return Ok(Some(125));
+            Decision::Prompt {
+                notice,
+                question,
+                max,
+                refusal,
+                code,
+            } => {
+                eprintln!("{notice}");
+                // Keep the execution lease, but release the write lock while asking.
+                let observed = repeat.generation.clone();
+                drop(write_lock);
+                hypothesis = process::ask(question, max)?;
+                let _lock = state::lock(&self.dir.join("workspace.lock"))?;
+                let latest = self.read_repeat()?;
+                if latest.generation != observed {
+                    return Err(error(
+                        "Concurrent invocation changed the repeat state",
+                        "并发调用改变了重复状态",
+                    ));
+                }
+                if hypothesis.is_none() {
+                    eprintln!("{refusal}");
+                    return Ok(Some(code));
+                }
+                self.previous = None;
+                self.run.hypothesis = hypothesis;
+                self.start_record()?;
+                return Ok(None);
             }
-            self.previous = None;
-            self.run.hypothesis = hypothesis;
-            self.start_record()?;
-            return Ok(None);
+            Decision::Run => (),
         }
         self.previous = if matches && hypothesis.is_none() {
             prior
@@ -259,7 +246,12 @@ impl Context {
         self.store.write(&self.state_path(), &self.repeat(None))?;
         self.store.write(&self.run_path(), &self.run)
     }
-    pub(super) fn finish(&mut self, outcome: Outcome, elapsed: u128) -> Result<()> {
+    pub(super) fn finish(
+        &mut self,
+        policy: &impl Policy,
+        outcome: Outcome,
+        elapsed: u128,
+    ) -> Result<()> {
         let completed = state::now();
         let after = snapshot(self.repo.as_ref(), &self.cwd);
         self.run.after = after.clone();
@@ -277,46 +269,24 @@ impl Context {
             && std::io::stdin().is_terminal()
             && process::interactive()
             && outcome.category == "exited";
-        let baseline = if stable && self.run.tool == "enough" && outcome.exit_code == 0 {
-            Some(Baseline {
-                run_id: self.generation.clone(),
-                invocation: self.invocation.clone(),
-                snapshot: after.unwrap(),
-                completed_at: completed,
-                signature: String::new(),
-                count: 0,
-            })
-        } else if stable && self.run.tool == "stuck" && outcome.exit_code != 0 {
-            match (&outcome.stdout, &outcome.stderr) {
-                (Some(out), Some(err)) if out.complete && err.complete => {
-                    let signature = state::fields(
-                        &self.store.key,
-                        [
-                            self.invocation.as_bytes(),
-                            after.as_ref().unwrap().as_bytes(),
-                            &outcome.exit_code.to_le_bytes(),
-                            out.digest.as_bytes(),
-                            &out.bytes.to_le_bytes(),
-                            err.digest.as_bytes(),
-                            &err.bytes.to_le_bytes(),
-                        ],
-                    );
-                    let count = self
-                        .previous
-                        .as_ref()
-                        .filter(|b| b.signature == signature)
-                        .map_or(1, |b| b.count.saturating_add(1));
-                    Some(Baseline {
-                        run_id: self.generation.clone(),
-                        invocation: self.invocation.clone(),
-                        snapshot: after.unwrap(),
-                        completed_at: completed,
-                        signature,
-                        count,
-                    })
-                }
-                _ => None,
-            }
+        let baseline = if stable {
+            let snapshot = after.unwrap();
+            policy
+                .baseline(
+                    &outcome,
+                    &self.store.key,
+                    &self.invocation,
+                    &snapshot,
+                    self.previous.as_ref(),
+                )
+                .map(|update| Baseline {
+                    run_id: self.generation.clone(),
+                    invocation: self.invocation.clone(),
+                    snapshot,
+                    completed_at: completed,
+                    signature: update.signature,
+                    count: update.count,
+                })
         } else {
             None
         };

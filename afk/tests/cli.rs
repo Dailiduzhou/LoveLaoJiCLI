@@ -54,9 +54,9 @@ fn fallback_terminal_settings_unchanged_on_completion_error_and_signals() {
     let status = std::process::Command::new("python3")
         .arg(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../tests/batch_two_pty.py"
+            "/tests/foreground_pty.py"
         ))
-        .args([BIN, "afk"])
+        .arg(BIN)
         .status()
         .unwrap();
     assert!(status.success());
@@ -65,10 +65,7 @@ fn fallback_terminal_settings_unchanged_on_completion_error_and_signals() {
 #[test]
 fn real_tui_lifecycle_and_job_control() {
     let status = std::process::Command::new("python3")
-        .arg(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../tests/afk_tui_pty.py"
-        ))
+        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/afk_tui_pty.py"))
         .arg(BIN)
         .status()
         .unwrap();
@@ -113,7 +110,7 @@ fn ownership_loss_preserves_new_foreground_settings_and_screen() {
     let status = std::process::Command::new("python3")
         .arg(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../tests/afk_ownership_pty.py"
+            "/tests/afk_ownership_pty.py"
         ))
         .arg(BIN)
         .status()

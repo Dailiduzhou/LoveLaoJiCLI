@@ -1,4 +1,4 @@
-//! Shared locale selection and minimal clap interface for the three tools.
+//! Shared locale/CLI scaffolding and tool-independent runtime infrastructure.
 
 use clap::{Arg, ArgAction, Command};
 

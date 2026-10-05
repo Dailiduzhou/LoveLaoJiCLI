@@ -88,11 +88,8 @@ fn forwards_large_binary_streams_without_recording_body() {
 #[test]
 fn foreground_pty_state_machine_and_interruptions() {
     let o = std::process::Command::new("python3")
-        .arg(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../tests/repeat_pty.py"
-        ))
-        .args([BIN, TOOL])
+        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/repeat_pty.py"))
+        .arg(BIN)
         .output()
         .unwrap();
     code(&o, 0);

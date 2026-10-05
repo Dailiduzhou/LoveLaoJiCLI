@@ -1,8 +1,8 @@
 # 实施状态与后续路线图 / Implementation status and roadmap
 
 本文件统一记录**已实现、当前限制、待补验收、后续实现**，不是所有设想都已上线的功能清单。
-首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.4.1`（第三批及 afk TUI）。后续交付应同步更新本文件。
-This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.4.1` (batch three and afk TUI).
+首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.4.2`（第三批及 afk TUI）。后续交付应同步更新本文件。
+This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.4.2` (batch three and afk TUI).
 
 - 当前接口与行为：[README.md](README.md) 及各工具双语 README。
 - 开发约束：[AGENTS.md](AGENTS.md)；业务参数、依赖准入和版本同步以该文件为准。
@@ -182,7 +182,7 @@ The requested Ratatui addition supersedes afk's prior deferral, not the minimal 
 - `bash -n install.sh`；14 项安装器测试 / 14 installer tests。
 - `python3 tests/report_records_pty.py target/release` 跨工具验收 / cross-tool acceptance。
 
-新增 [scene 单元测试](afk/src/scene.rs) 与 [真实 TUI PTY](tests/afk_tui_pty.py)，由 `cargo test -p afk` 调用。
+新增 [scene 单元测试](afk/src/scene.rs) 与 [真实 TUI PTY](afk/tests/afk_tui_pty.py)，由 `cargo test -p afk` 调用。
 覆盖：正常完成、按键/粘贴洪泛不延时或泄漏给 shell、缩小/极大尺寸、中文、Ctrl+C 与四种终止信号、
 进入后错误/真实后端写错误/panic 展开、Ctrl+Z/fg/bg、挂起超过期限，以及 dumb/小终端/重定向降级。
 比较完整 termios，验证备用屏幕退出和光标显示，拒绝意外光标位置查询；未用假 TTY 开关绕过前台检查。

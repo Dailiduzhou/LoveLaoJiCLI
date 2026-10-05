@@ -32,6 +32,8 @@ pub(super) struct Run {
     pub(super) result: Option<Outcome>,
     pub(super) hypothesis: Option<String>,
 }
+// These producer names and capture requirements below are the legacy shared
+// wire-format contract read by later/goodnight/proof, not runtime tool policy.
 fn valid_run(run: &Run, dir: &Path) -> bool {
     run.schema_version == 1
         && ["enough", "stuck"].contains(&run.tool.as_str())

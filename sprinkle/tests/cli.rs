@@ -2,14 +2,27 @@
 mod support;
 use std::fs;
 use std::os::unix::fs::{symlink, PermissionsExt};
+use std::path::PathBuf;
 use support::*;
 const BIN: &str = env!("CARGO_BIN_EXE_sprinkle");
 #[test]
 fn cli_basics() {
     basics(BIN, "sprinkle");
+    let f = Fixture::new(BIN, false);
+    for locale in ["C", "zh_CN.UTF-8"] {
+        let output = f
+            .cmd()
+            .arg("--help")
+            .env("LC_ALL", locale)
+            .output()
+            .unwrap();
+        code(&output, 0);
+        assert!(!text(&output.stdout).contains("SPRINKLE_SEED"));
+    }
 }
 fn fixture() -> Fixture {
-    let f = Fixture::new(BIN, true);
+    let mut f = Fixture::new(BIN, true);
+    f.env.push(("SPRINKLE_SEED", "42"));
     for i in 0..40 {
         fs::write(f.repo.join(format!("f{i}.rs")), "fn main() {}\n").unwrap();
     }
@@ -188,4 +201,20 @@ fn resume_interrupted_undo_stages() {
     m["phase"] = "restoring".into();
     store.write(&manifest, &m).unwrap();
     code(&f.run(&["undo"]), 0);
+}
+
+// Managed-copy lookup belongs to sprinkle, not the shared fixture.
+impl Fixture {
+    pub fn copy(&self) -> PathBuf {
+        fs::read_dir(&self.root)
+            .unwrap()
+            .flatten()
+            .find(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("repo-sprinkled-")
+            })
+            .unwrap()
+            .path()
+    }
 }

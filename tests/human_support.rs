@@ -9,6 +9,7 @@ pub struct Fixture {
     pub repo: PathBuf,
     pub state: PathBuf,
     pub bin: &'static str,
+    pub env: Vec<(&'static str, &'static str)>,
 }
 impl Fixture {
     pub fn new(bin: &'static str, git: bool) -> Self {
@@ -27,6 +28,7 @@ impl Fixture {
             repo,
             state,
             bin,
+            env: Vec::new(),
         };
         if git {
             f.git(&["init", "-q"]);
@@ -44,7 +46,7 @@ impl Fixture {
             .env("HOME", &self.root)
             .env("XDG_STATE_HOME", &self.state)
             .env("LC_ALL", "C")
-            .env("SPRINKLE_SEED", "42")
+            .envs(self.env.iter().copied())
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1");
         for k in [
@@ -100,18 +102,6 @@ impl Fixture {
         visit(&self.state, name, &mut out);
         out
     }
-    pub fn copy(&self) -> PathBuf {
-        fs::read_dir(&self.root)
-            .unwrap()
-            .flatten()
-            .find(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .starts_with("repo-sprinkled-")
-            })
-            .unwrap()
-            .path()
-    }
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
@@ -150,7 +140,6 @@ pub fn basics(bin: &'static str, tool: &str) {
         code(&o, 0);
         let t = text(&o.stdout);
         assert!(t.contains(if locale == "C" { "Usage" } else { "用法" }));
-        assert!(!t.contains("SPRINKLE_SEED"));
     }
     code(&f.run(&["--unknown"]), 2);
 }

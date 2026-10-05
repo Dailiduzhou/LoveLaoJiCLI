@@ -49,15 +49,15 @@ bash install.sh                 # 菜单：发布版安装 / 卸载 / 本地编�
 bash install.sh install         # 下载脚本对应版本 / Download the script's release version
 bash install.sh uninstall       # 直接进入卸载确认 / Confirm uninstallation
 bash install.sh --help
-LOVELAOJI_VERSION=v0.4.1 bash install.sh install  # 指定版本 / Pin a version
+LOVELAOJI_VERSION=v0.4.2 bash install.sh install  # 指定版本 / Pin a version
 
 # 在源码 checkout 内，保留本地构建安装（需要 Rust/Cargo）
 # Source checkout only; local build installation still requires Rust/Cargo:
 ./install.sh install-local
 ```
 
-脚本当前默认 `v0.4.1`，不会静默追踪 latest。只有对应 Release 发布后才能下载；404 或网络失败会报错，不自动回退编译。需要固定脚本本身时，将 raw URL 的 `main` 换成对应标签（例如 `v0.4.1`）。
-The script defaults to `v0.4.1`, not a mutable latest release. Assets must be published first; missing releases/network failures are errors, never a silent source-build fallback. Replace `main` in the raw URL with a release tag to pin the script too.
+脚本当前默认 `v0.4.2`，不会静默追踪 latest。只有对应 Release 发布后才能下载；404 或网络失败会报错，不自动回退编译。需要固定脚本本身时，将 raw URL 的 `main` 换成对应标签（例如 `v0.4.2`）。
+The script defaults to `v0.4.2`, not a mutable latest release. Assets must be published first; missing releases/network failures are errors, never a silent source-build fallback. Replace `main` in the raw URL with a release tag to pin the script too.
 
 | 平台 / Platform | Release target | 系统基线 / OS baseline |
 | --- | --- | --- |
@@ -301,8 +301,14 @@ Modules separate responsibilities without changing CLI arguments or persisted re
   Isolated stdin parsing, validated task model/stable selection, and CLI/locked persistence.
 - `later/src/`：`main` 编排 CLI 与锁；`card` 管理记录和 Git 上下文采集；`card/display` 只负责展示。
   CLI/lock orchestration, card schema/Git capture, and read-only presentation.
-- `cli-common/src/repeat/`：enough/stuck 共用 `cli` 调度、`protocol` 执行租约与基线状态机、`records` 历史记录与只读查询；`repeat.rs` 保持公共接口。
-  Shared enough/stuck CLI dispatch, execution lease/baseline protocol, and record/history readers; `repeat.rs` preserves the public API.
+- `enough/src/`、`stuck/src/`：各自的 `main` 定义参数和帮助，`policy` 定义成功提醒/失败拦截、提示文案和基线判断。
+  Each tool owns its CLI/help and policy: success reminders or failure gates, prompts, and baseline decisions.
+- `cli-common/src/repeat/`：仅共享 `execution` 失败放行执行、`protocol` 租约/锁/快照/基线持久化，以及 `records` 跨工具历史格式与查询；不按工具名分派业务逻辑。
+  Shared fail-open execution, lease/lock/snapshot/baseline persistence, and cross-tool record formats/readers; no tool-name business dispatch.
+- 工具专属源码、文案、参数、测试场景和资源放在 `<tool>/`。根目录 `tests/` 只放复用的测试支撑/参数化契约、跨工具验收及安装器测试；`scripts/` 保留工作区自动化。
+  Tool-specific code, text, arguments, test scenarios and assets live under `<tool>/`. Root `tests/` holds reusable harnesses/parameterized contracts, cross-tool acceptance and installer tests; `scripts/` holds workspace automation.
+- `cli-common/` 只依赖通用基础设施，不反向依赖工具。多个工具读写的历史记录格式（含旧记录的生产者校验和完整性规则）是共享兼容性契约；模块移动不改变磁盘格式。
+  `cli-common/` never depends on tool crates. Historical record formats used across tools, including legacy producer validation/completeness rules, remain a shared compatibility contract; module moves do not change persisted formats.
 
 ## 测试 / Tests
 
