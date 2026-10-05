@@ -32,6 +32,13 @@ impl Fixture {
         };
         if git {
             f.git(&["init", "-q"]);
+            // Git runs maintenance in a detached process after commands that write
+            // objects (maintenance.auto / gc.auto). It creates and removes
+            // .git/objects/maintenance.lock at an unpredictable moment, which races
+            // with the "nothing on disk changed" snapshots these fixtures assert.
+            // Observed with git 2.56.0; a fixture repo needs no maintenance anyway.
+            f.git(&["config", "gc.auto", "0"]);
+            f.git(&["config", "maintenance.auto", "false"]);
             f.git(&["config", "user.name", "Test"]);
             f.git(&["config", "user.email", "test@localhost"]);
             fs::write(f.repo.join("code.rs"), b"fn main() {}\n").unwrap();
