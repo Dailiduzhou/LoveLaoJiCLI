@@ -72,57 +72,6 @@ pub fn run(
     println!("{message}");
 }
 
-#[cfg(test)]
-mod tests {
-    use super::Language;
-
-    fn language(locales: &[&str]) -> Language {
-        Language::from_locales(locales.iter().map(|value| Some((*value).to_owned())))
-    }
-
-    #[test]
-    fn recognizes_chinese_locale_forms() {
-        for locale in [
-            "zh_CN",
-            "zh_CN.UTF-8",
-            "zh-CN",
-            "ZH-cn",
-            "zh_CN@modifier",
-            "zh",
-        ] {
-            assert_eq!(language(&[locale]), Language::Chinese, "{locale}");
-        }
-    }
-
-    #[test]
-    fn first_nonempty_locale_wins() {
-        assert_eq!(language(&["en_US", "zh_CN", "zh_CN"]), Language::English);
-        assert_eq!(language(&["", "zh_CN", "en_US"]), Language::Chinese);
-        assert_eq!(language(&["", "", "zh_CN"]), Language::Chinese);
-        assert_eq!(
-            Language::from_locales([None, Some("zh_CN".to_owned())]),
-            Language::Chinese
-        );
-    }
-
-    #[test]
-    fn defaults_to_english() {
-        for locale in [
-            "",
-            "C",
-            "POSIX",
-            "C.UTF-8",
-            "en-US",
-            "en_US.UTF-8",
-            "fr_FR",
-            "zh_TW",
-        ] {
-            assert_eq!(language(&[locale]), Language::English, "{locale}");
-        }
-        assert_eq!(Language::from_locales([]), Language::English);
-    }
-}
-
 #[cfg(unix)]
 pub mod git;
 #[cfg(unix)]
@@ -191,3 +140,54 @@ pub fn text_input(value: &str, max: usize) -> Option<String> {
 
 #[cfg(feature = "local-time")]
 pub mod local_time;
+
+#[cfg(test)]
+mod tests {
+    use super::Language;
+
+    fn language(locales: &[&str]) -> Language {
+        Language::from_locales(locales.iter().map(|value| Some((*value).to_owned())))
+    }
+
+    #[test]
+    fn recognizes_chinese_locale_forms() {
+        for locale in [
+            "zh_CN",
+            "zh_CN.UTF-8",
+            "zh-CN",
+            "ZH-cn",
+            "zh_CN@modifier",
+            "zh",
+        ] {
+            assert_eq!(language(&[locale]), Language::Chinese, "{locale}");
+        }
+    }
+
+    #[test]
+    fn first_nonempty_locale_wins() {
+        assert_eq!(language(&["en_US", "zh_CN", "zh_CN"]), Language::English);
+        assert_eq!(language(&["", "zh_CN", "en_US"]), Language::Chinese);
+        assert_eq!(language(&["", "", "zh_CN"]), Language::Chinese);
+        assert_eq!(
+            Language::from_locales([None, Some("zh_CN".to_owned())]),
+            Language::Chinese
+        );
+    }
+
+    #[test]
+    fn defaults_to_english() {
+        for locale in [
+            "",
+            "C",
+            "POSIX",
+            "C.UTF-8",
+            "en-US",
+            "en_US.UTF-8",
+            "fr_FR",
+            "zh_TW",
+        ] {
+            assert_eq!(language(&[locale]), Language::English, "{locale}");
+        }
+        assert_eq!(Language::from_locales([]), Language::English);
+    }
+}
