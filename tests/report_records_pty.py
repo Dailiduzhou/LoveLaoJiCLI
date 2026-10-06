@@ -8,6 +8,7 @@ from pathlib import Path
 import pty
 import select
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -18,10 +19,10 @@ with tempfile.TemporaryDirectory(prefix="reports-pty-") as temp:
     root = Path(temp)
     repo = root / "repo"
     repo.mkdir()
-    env = dict(os.environ, HOME=temp, XDG_STATE_HOME=str(root / "state"),
-               LC_ALL="C", TZ="UTC", GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")
-    for key in ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"]:
-        env.pop(key, None)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(HOME=temp, XDG_STATE_HOME=str(root / "state"), XDG_CONFIG_HOME=str(root / "config"),
+               PATH="/usr/bin:/bin", LC_ALL="C", TZ="UTC",
+               GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")
     def git(*args):
         subprocess.run(["git", *args], cwd=repo, env=env, check=True, capture_output=True, timeout=15)
     git("init", "-q")
@@ -55,6 +56,17 @@ with tempfile.TemporaryDirectory(prefix="reports-pty-") as temp:
                     status = child_status
                     break
             assert status is not None, ("hung", tool, output)
+            while select.select([fd], [], [], 0)[0]:
+                try:
+                    chunk = os.read(fd, 65536)
+                except OSError as error:
+                    if error.errno != errno.EIO:
+                        raise
+                    break
+                if not chunk:
+                    break
+                output += chunk
+            assert reply is None, ("hypothesis prompt never observed", tool, output)
             assert os.waitstatus_to_exitcode(status) == expected, (tool, output, status)
             return output
         finally:
@@ -63,29 +75,46 @@ with tempfile.TemporaryDirectory(prefix="reports-pty-") as temp:
                 os.waitpid(pid, 0)
             os.close(fd)
 
+    def snapshot():
+        state = root / "state"
+        if not state.exists():
+            return None
+        result = {}
+        for path in [state, *state.rglob("*")]:
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode):
+                content = os.readlink(path)
+            elif stat.S_ISREG(mode):
+                content = path.read_bytes()
+            else:
+                content = None
+            result[str(path.relative_to(state))] = (mode, content)
+        return result
+
     def report(tool):
-        before = {str(p): p.read_bytes() for p in (root / "state").rglob("*") if p.is_file()}
+        before = snapshot()
         r = subprocess.run([bindir / tool], cwd=repo, env=env, capture_output=True, timeout=15)
         assert r.returncode == 0, r
-        after = {str(p): p.read_bytes() for p in (root / "state").rglob("*") if p.is_file()}
-        assert before == after, "report mutated state"
+        assert before == snapshot(), "report mutated state"
         return r.stdout
 
-    assert b"completion date): 0" in report("proof")
+    completed = b"Completed executions (current workspace, completion date): "
+    successful = b"Successful executions (not necessarily tests): "
+    assert completed + b"0" in report("proof").splitlines()
     assert not (root / "state").exists()
     cmd = ["sh", "-c", "printf ran"]
     wrapper("enough", cmd, 0)
     assert b"already passed" in wrapper("enough", cmd, 0)
     out = report("proof")
-    assert b"completion date): 1" in out, out
-    assert b"Successful executions (not necessarily tests): 1" in out, out
+    assert completed + b"1" in out.splitlines(), out
+    assert successful + b"1" in out.splitlines(), out
     fail = ["sh", "-c", "printf failed; exit 7"]
     for _ in range(3):
         wrapper("stuck", fail, 7)
     wrapper("stuck", fail, 125, reply=b"\x04")
     out = report("proof")
-    assert b"completion date): 4" in out, out
-    assert b"Successful executions (not necessarily tests): 1" in out, out
+    assert completed + b"4" in out.splitlines(), out
+    assert successful + b"1" in out.splitlines(), out
     out = report("goodnight")
     assert b"not necessarily tests" in out and b"tests passed" not in out, out
     print("cross-tool PTY acceptance passed (real executions, skip, gate, read-only reports)")

@@ -48,24 +48,32 @@ impl Fixture {
         f
     }
     pub fn environment(&self, c: &mut Command) {
+        use std::os::unix::ffi::OsStrExt;
+        // Host Git identities, dates, attributes and test hooks must not alter
+        // the fixture. Individual scenarios can opt back in after cmd().
+        for (key, _) in std::env::vars_os() {
+            if key.as_bytes().starts_with(b"GIT_") {
+                c.env_remove(key);
+            }
+        }
+        for key in [
+            "ONE_SEED",
+            "POKE_SEED",
+            "SPRINKLE_SEED",
+            "AFK_FAST",
+            "AFK_TEST_FAILURE",
+        ] {
+            c.env_remove(key);
+        }
         c.current_dir(&self.repo)
             .env("PATH", "/usr/bin:/bin")
             .env("HOME", &self.root)
+            .env("XDG_CONFIG_HOME", self.root.join("config"))
             .env("XDG_STATE_HOME", &self.state)
             .env("LC_ALL", "C")
-            .envs(self.env.iter().copied())
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .env("GIT_CONFIG_NOSYSTEM", "1");
-        for k in [
-            "GIT_DIR",
-            "GIT_WORK_TREE",
-            "GIT_INDEX_FILE",
-            "GIT_COMMON_DIR",
-            "GIT_CONFIG_COUNT",
-            "GIT_CONFIG_PARAMETERS",
-        ] {
-            c.env_remove(k);
-        }
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .envs(self.env.iter().copied());
     }
     pub fn cmd(&self) -> Command {
         let mut c = Command::new(self.bin);

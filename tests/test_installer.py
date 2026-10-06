@@ -7,6 +7,7 @@ import re
 import tarfile
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -47,6 +48,7 @@ class InstallerFixture(unittest.TestCase):
             "cargo",
             """#!/usr/bin/env bash
 set -eu
+printf 'cargo\n' >> "$BUILD_LOG"
 [[ ${FAIL_BUILD:-0} == 0 ]] || exit 42
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -73,6 +75,8 @@ done
             "BASH_ENV",
             "ENV",
             "LOVELAOJI_VERSION",
+            "FAIL_BUILD",
+            "FAIL_DOWNLOAD",
         ]:
             self.env.pop(key, None)
         self.env.update(
@@ -80,6 +84,7 @@ done
             SHELL="/bin/bash",
             LANG="C",
             PATH=f"{self.fake_bin}:/usr/bin:/bin",
+            BUILD_LOG=str(self.root / "builds"),
         )
         self.install_dir = self.home / ".local/share/lovelaojicli"
         self.bin_dir = self.install_dir / "bin"
@@ -88,6 +93,20 @@ done
         path = self.fake_bin / name
         path.write_text(content)
         path.chmod(0o755)
+
+    def home_snapshot(self):
+        """Include empty directories, permissions and links, not just one binary."""
+        result = {}
+        for path in self.home.rglob("*"):
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode):
+                content = os.readlink(path)
+            elif stat.S_ISREG(mode):
+                content = path.read_bytes()
+            else:
+                content = None
+            result[str(path.relative_to(self.home))] = (mode, content)
+        return result
 
     def run_script(self, *args, answer="y\n", ok=True):
         result = subprocess.run(
@@ -200,10 +219,10 @@ class LocalInstallerTests(InstallerFixture):
 
     def test_failed_upgrade_preserves_installation(self):
         self.run_script("install-local")
-        before = (self.bin_dir / "love").read_bytes()
+        before = self.home_snapshot()
         self.env["FAIL_BUILD"] = "1"
         self.run_script("install-local", ok=False)
-        self.assertEqual((self.bin_dir / "love").read_bytes(), before)
+        self.assertEqual(self.home_snapshot(), before)
 
     def test_existing_unmanaged_install_is_not_overwritten(self):
         self.install_dir.mkdir(parents=True)
@@ -303,11 +322,19 @@ class LocalInstallerTests(InstallerFixture):
         self.run_script("install-local", "extra", ok=False)
         self.run_script(answer="9\n", ok=False)
 
-    def test_unsupported_shell_and_relative_data_home(self):
+    def test_unsupported_shell(self):
         self.env["SHELL"] = "/bin/tcsh"
-        self.run_script("install-local", ok=False)
+        result = self.run_script("install-local", ok=False)
+        self.assertIn("Unsupported shell: tcsh", result.stderr)
+        self.assertFalse((self.root / "builds").exists())
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_relative_data_home(self):
+        # Keep the shell valid so another error cannot mask path validation.
         self.env["XDG_DATA_HOME"] = "relative"
-        self.run_script("install-local", ok=False)
+        result = self.run_script("install-local", ok=False)
+        self.assertIn("Expected an absolute path: relative/lovelaojicli", result.stderr)
+        self.assertFalse((self.root / "builds").exists())
         self.assertEqual(list(self.home.iterdir()), [])
 
 
@@ -413,10 +440,21 @@ cp "$ASSET_DIR/${url##*/}" "$output"
         self.assertFalse(self.bin_dir.exists())
 
     def test_explicit_version(self):
-        self.env["LOVELAOJI_VERSION"] = "v0.4.2"
-        self.make_archive(version="v0.4.2")
+        major, minor, patch = map(int, DEFAULT_VERSION[1:].split("."))
+        version = f"v{major}.{minor}.{patch + 1}"
+        self.assertNotEqual(version, DEFAULT_VERSION)
+        self.env["LOVELAOJI_VERSION"] = version
+        self.make_archive(version=version)
         self.run_script("install")
-        self.assertIn("/v0.4.2/", (self.root / "downloads").read_text())
+        downloads = (self.root / "downloads").read_text().splitlines()
+        asset = f"lovelaojicli-{version}-x86_64-unknown-linux-gnu.tar.gz"
+        base = f"https://github.com/Dailiduzhou/LoveLaoJiCLI/releases/download/{version}"
+        self.assertEqual(downloads, [f"{base}/{asset}", f"{base}/{asset}.sha256"])
+        for tool in TOOLS:
+            result = subprocess.run(
+                [self.bin_dir / tool, "--version"], check=True, capture_output=True, text=True
+            )
+            self.assertEqual(result.stdout, f"{tool} {version[1:]}\n")
 
     def test_download_failure_and_failed_upgrade(self):
         self.env["FAIL_DOWNLOAD"] = "1"
@@ -424,12 +462,10 @@ cp "$ASSET_DIR/${url##*/}" "$output"
         self.assertEqual(list(self.home.iterdir()), [])
         self.env.pop("FAIL_DOWNLOAD")
         self.run_script("install")
-        before = (self.bin_dir / "love").read_bytes()
-        rc = (self.home / ".bashrc").read_bytes()
+        before = self.home_snapshot()
         self.env["FAIL_DOWNLOAD"] = "1"
         self.run_script("install", ok=False)
-        self.assertEqual((self.bin_dir / "love").read_bytes(), before)
-        self.assertEqual((self.home / ".bashrc").read_bytes(), rc)
+        self.assertEqual(self.home_snapshot(), before)
 
     def test_checksum_mismatch(self):
         archive = self.make_archive()
@@ -445,12 +481,18 @@ cp "$ASSET_DIR/${url##*/}" "$output"
                 self.assertEqual(list(self.home.iterdir()), [])
                 self.assertFalse((self.root / "escaped").exists())
 
-    def test_wrong_version_or_failed_execution_preserves_home(self):
-        for variant in ["wrong-version", "cannot-run"]:
+    def test_wrong_version_or_failed_execution_preserves_installation(self):
+        self.run_script("install")
+        before = self.home_snapshot()
+        for variant, message in [
+            ("wrong-version", "Unexpected binary version: poke"),
+            ("cannot-run", "Cannot run poke"),
+        ]:
             with self.subTest(variant=variant):
                 self.make_archive(variant=variant)
-                self.run_script("install", ok=False)
-                self.assertEqual(list(self.home.iterdir()), [])
+                result = self.run_script("install", ok=False)
+                self.assertIn(message, result.stderr)
+                self.assertEqual(self.home_snapshot(), before)
 
     def test_checksum_manifest_must_name_exact_asset(self):
         archive = self.make_archive()

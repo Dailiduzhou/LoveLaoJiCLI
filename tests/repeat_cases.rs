@@ -59,8 +59,16 @@ fn pipes_always_run_and_never_record_argv_or_output() {
         .unwrap();
     assert!(state["baseline"].is_null());
     let runs = dirs[0].parent().unwrap().join("runs");
-    for e in fs::read_dir(runs).unwrap() {
-        let data = fs::read_to_string(e.unwrap().path()).unwrap();
+    let records: Vec<_> = fs::read_dir(runs)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(records.len(), 4, "each real execution must leave a record");
+    for path in records {
+        let record: serde_json::Value = f.store().read(&path).unwrap().unwrap();
+        assert_eq!(record["result"]["exit_code"], 4);
+        assert!(record["finished_at"].as_u64().is_some());
+        let data = fs::read_to_string(path).unwrap();
         assert!(!data.contains("TOP_SECRET"));
         assert!(!data.contains("PASSWORD_SENTINEL"));
     }
@@ -80,10 +88,12 @@ fn state_fault_is_fail_open() {
 #[test]
 fn forwards_large_binary_streams_without_recording_body() {
     let f = Fixture::new(BIN, false);
-    let o=f.run(&["python3","-c","import os,threading; t=threading.Thread(target=lambda: os.write(2,b'e'*1100000));t.start();os.write(1,bytes(range(256))*5000);t.join()"]);
+    // Buffered write_all equivalents avoid short os.write() results making
+    // the producer itself lose bytes. Assert content, not only stream length.
+    let o = f.run(&["python3", "-c", "import sys,threading; t=threading.Thread(target=lambda: sys.stderr.buffer.write(b'e'*1100000)); t.start(); sys.stdout.buffer.write(bytes(range(256))*5000); t.join()"]);
     code(&o, 0);
-    assert_eq!(o.stdout.len(), 1280000);
-    assert_eq!(o.stderr.len(), 1100000);
+    assert_eq!(o.stdout, (0..=255u8).collect::<Vec<_>>().repeat(5000));
+    assert_eq!(o.stderr, vec![b'e'; 1100000]);
 }
 #[test]
 fn foreground_pty_state_machine_and_interruptions() {

@@ -5,6 +5,7 @@ use cli_common::state::{self, Store};
 pub use human::*;
 use serde_json::{json, Value};
 use std::fs;
+use std::os::unix::{ffi::OsStrExt, fs::PermissionsExt};
 use std::path::{Path, PathBuf};
 
 pub fn store(f: &Fixture) -> Store {
@@ -52,17 +53,26 @@ pub fn mutate(f: &Fixture, path: &Path, change: impl FnOnce(&mut Value)) {
     change(&mut value);
     store.write(path, &value).unwrap();
 }
-pub fn snapshot(path: &Path) -> Vec<(PathBuf, Vec<u8>)> {
-    fn visit(root: &Path, path: &Path, out: &mut Vec<(PathBuf, Vec<u8>)>) {
-        for e in fs::read_dir(path).unwrap() {
-            let e = e.unwrap();
-            if e.file_type().unwrap().is_dir() {
-                visit(root, &e.path(), out);
-            } else if e.file_type().unwrap().is_file() {
-                out.push((
-                    e.path().strip_prefix(root).unwrap().to_path_buf(),
-                    fs::read(e.path()).unwrap(),
-                ));
+pub fn snapshot(path: &Path) -> Vec<(PathBuf, u32, Vec<u8>)> {
+    fn visit(root: &Path, path: &Path, out: &mut Vec<(PathBuf, u32, Vec<u8>)>) {
+        let metadata = fs::symlink_metadata(path).unwrap();
+        let content = if metadata.is_symlink() {
+            fs::read_link(path).unwrap().as_os_str().as_bytes().to_vec()
+        } else if metadata.is_file() {
+            fs::read(path).unwrap()
+        } else {
+            Vec::new()
+        };
+        // The mode includes the entry type. Record empty directories and
+        // symlink targets too; file-only snapshots miss read-only violations.
+        out.push((
+            path.strip_prefix(root).unwrap().to_path_buf(),
+            metadata.permissions().mode(),
+            content,
+        ));
+        if metadata.is_dir() {
+            for e in fs::read_dir(path).unwrap() {
+                visit(root, &e.unwrap().path(), out);
             }
         }
     }

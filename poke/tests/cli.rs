@@ -57,8 +57,13 @@ fn deterministic_selection_allows_repeats_and_keeps_no_history() {
     let run = || f.cmd().env("POKE_SEED", "42").output().unwrap();
     let first = run();
     code(&first, 0);
+    assert!(["A", "B", "C"]
+        .iter()
+        .any(|name| { text(&first.stdout) == format!("If you like, say hello to: {name}\n") }));
     for _ in 0..4 {
-        assert_eq!(run().stdout, first.stdout);
+        let o = run();
+        code(&o, 0);
+        assert_eq!(o.stdout, first.stdout);
     }
     assert_eq!(fs::read(&path).unwrap(), before);
     assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 2); // list and lock only
@@ -119,18 +124,30 @@ fn concurrent_adds_preserve_every_success() {
                 .unwrap()
         })
         .collect();
-    let mut successes = 1;
-    for child in children {
+    let mut expected = vec!["initial".to_owned()];
+    for (n, child) in children.into_iter().enumerate() {
         let o = child.wait_with_output().unwrap();
         if o.status.success() {
-            successes += 1;
+            expected.push(format!("name-{n}"));
         } else {
             code(&o, 1);
+            assert!(text(&o.stderr).contains("busy"), "{o:?}");
         }
     }
     let path = f.find("names.json").pop().unwrap();
     let value: serde_json::Value = f.store().read(&path).unwrap().unwrap();
-    assert_eq!(value["names"].as_array().unwrap().len(), successes);
+    let mut actual: Vec<_> = value["names"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|name| name.as_str().unwrap().to_owned())
+        .collect();
+    actual.sort();
+    expected.sort();
+    assert_eq!(
+        actual, expected,
+        "every acknowledged name must survive exactly once"
+    );
 }
 #[test]
 fn capacity_is_bounded_but_duplicate_add_still_succeeds() {

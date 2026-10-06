@@ -165,18 +165,30 @@ fn concurrent_adds_do_not_lose_successful_writes() {
                 .unwrap()
         })
         .collect();
-    let mut successes = 1;
-    for child in children {
+    let mut expected = vec!["initial".to_owned()];
+    for (n, child) in children.into_iter().enumerate() {
         let o = child.wait_with_output().unwrap();
         match o.status.code() {
-            Some(0) => successes += 1,
-            Some(1) => (),
+            Some(0) => expected.push(format!("task-{n}")),
+            Some(1) => assert!(text(&o.stderr).contains("busy"), "{o:?}"),
             _ => panic!("unexpected: {o:?}"),
         }
     }
     let path = f.find("tasks.json").pop().unwrap();
     let record: serde_json::Value = f.store().read(&path).unwrap().unwrap();
-    assert_eq!(record["tasks"].as_array().unwrap().len(), successes);
+    let tasks = record["tasks"].as_array().unwrap();
+    let mut actual: Vec<_> = tasks
+        .iter()
+        .map(|task| task["text"].as_str().unwrap().to_owned())
+        .collect();
+    actual.sort();
+    expected.sort();
+    assert_eq!(
+        actual, expected,
+        "every acknowledged task must survive exactly once"
+    );
+    let ids: std::collections::HashSet<_> = tasks.iter().map(|task| &task["id"]).collect();
+    assert_eq!(ids.len(), tasks.len(), "task IDs must remain unique");
 }
 #[test]
 fn non_utf8_state_and_locale_priority() {
@@ -250,8 +262,9 @@ fn adding_preserves_selection_and_concurrent_readers_agree() {
     assert!(!selections.is_empty());
     let saved = f.run(&[]);
     code(&saved, 0);
+    assert!([b"new task\n".as_slice(), b"another\n"].contains(&saved.stdout.as_slice()));
     for selection in selections {
-        assert_eq!(text(&selection), text(&saved.stdout));
+        assert_eq!(selection, saved.stdout);
     }
 }
 
@@ -273,6 +286,11 @@ fn concurrent_readers_ignore_test_runner_stdin() {
             .output()
             .unwrap();
         code(&o, 0);
+        assert!(text(&o.stdout).contains("1 passed"), "{o:?}");
+        assert!(
+            !text(&o.stdout).contains("0 tests"),
+            "test filter matched nothing: {o:?}"
+        );
     }
 }
 

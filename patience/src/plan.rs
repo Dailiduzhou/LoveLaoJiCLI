@@ -235,10 +235,55 @@ mod tests {
     fn fast_mode_scales_every_timing_down() {
         let slow = plan_for(3, 1.0);
         let fast = plan_for(3, 0.01);
-        assert!(fast.scripted_time() <= slow.scripted_time() * 0.02 + 1e-9);
-        assert!(fast.min_show <= slow.min_show * 0.02 + 1e-9);
-        assert!(fast.tick < slow.tick);
-        assert!(fast.fill_frame < slow.fill_frame);
+        // An upper bound alone accepts zero timings or an incorrect 50x
+        // compression. Require the documented 100x scale for every segment.
+        let scaled = |actual: f64, original: f64| {
+            assert!((actual - original * 0.01).abs() < 1e-9);
+        };
+        assert_eq!(fast.segments.len(), slow.segments.len());
+        for (fast, slow) in fast.segments.iter().zip(&slow.segments) {
+            match (fast, slow) {
+                (
+                    Segment::Climb {
+                        curve: fc,
+                        from: ff,
+                        to: ft,
+                        duration: fd,
+                    },
+                    Segment::Climb {
+                        curve: sc,
+                        from: sf,
+                        to: st,
+                        duration: sd,
+                    },
+                ) => {
+                    assert_eq!((fc, ff, ft), (sc, sf, st));
+                    scaled(*fd, *sd);
+                }
+                (
+                    Segment::Stall {
+                        point: fp,
+                        duration: fd,
+                    },
+                    Segment::Stall {
+                        point: sp,
+                        duration: sd,
+                    },
+                ) => {
+                    assert_eq!(fp, sp);
+                    if sd.is_infinite() {
+                        assert_eq!(fd, sd);
+                    } else {
+                        scaled(*fd, *sd);
+                    }
+                }
+                _ => panic!("scaling changed the show's structure"),
+            }
+        }
+        scaled(fast.scripted_time(), slow.scripted_time());
+        scaled(fast.min_show, slow.min_show);
+        scaled(fast.tick, slow.tick);
+        scaled(fast.fill_frame, slow.fill_frame);
     }
 
     #[test]

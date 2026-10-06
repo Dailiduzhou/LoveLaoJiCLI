@@ -114,22 +114,27 @@ mod tests {
                 let size = usize::from(slot(scale));
                 assert_eq!(lines.len(), size);
                 assert!(lines.iter().all(|row| row.len() == size));
-                // Sample each native stroke location: scaling must not change its identity.
+                // Check required strokes AND blank cells. Merely validating
+                // existing '_' cells lets missing horizontal strokes pass.
+                // Native glyphs are pinned independently by the test above.
                 let native = super::lines(&digit.to_string(), 1);
                 for (y, row) in lines.iter().enumerate() {
                     for (x, byte) in row.bytes().enumerate() {
-                        if byte == b'_' {
-                            assert!([0, size / 2, size - 1].contains(&y));
-                            assert_eq!(native[y / usize::from(scale)].as_bytes()[2], b'_');
-                        } else if byte == b'|' {
-                            assert!([0, size - 1].contains(&x));
-                        }
-                    }
-                }
-                for x in [0, size - 1] {
-                    for (from, to, native_y) in [(1, size / 2, 1), (size / 2 + 1, size - 1, 3)] {
-                        assert!(lines[from..=to].iter().all(|row| row.as_bytes()[x]
-                            == native[native_y].as_bytes()[x / usize::from(scale)]));
+                        let expected = if x == 0 || x == size - 1 {
+                            let native_y = if y == 0 {
+                                0
+                            } else if y <= size / 2 {
+                                1
+                            } else {
+                                3
+                            };
+                            native[native_y].as_bytes()[if x == 0 { 0 } else { 4 }]
+                        } else if [0, size / 2, size - 1].contains(&y) {
+                            native[y / usize::from(scale)].as_bytes()[2]
+                        } else {
+                            b' '
+                        };
+                        assert_eq!(byte, expected, "digit {digit}, scale {scale}, ({x}, {y})");
                     }
                 }
             }
@@ -159,11 +164,29 @@ mod tests {
 
     #[test]
     fn format_does_not_shrink_at_the_hour_boundary() {
-        assert_eq!(text(3600, true), "01:00:00");
-        assert_eq!(text(3599, true), "00:59:59");
-        assert_eq!(text(0, true), "00:00:00");
-        assert_eq!(text(86400, true), "24:00:00");
-        assert_eq!(text(3599, false), "59:59");
-        assert_eq!(text(0, false), "00:00");
+        // Exercise the real formatter's original-duration decision, not text()
+        // with a preselected hours flag that bypasses that decision.
+        for (wait, elapsed, expected) in [
+            (3600, 0, "01:00:00"),
+            (3600, 1, "00:59:59"),
+            (3600, 3600, "00:00:00"),
+            (3600, 3601, "00:00:00"),
+            (86400, 0, "24:00:00"),
+            (3599, 0, "59:59"),
+            (3599, 3599, "00:00"),
+        ] {
+            assert_eq!(
+                remaining(Duration::from_secs(elapsed), Duration::from_secs(wait)),
+                expected
+            );
+        }
+        assert_eq!(
+            remaining(Duration::from_millis(1), Duration::from_secs(1)),
+            "00:01"
+        );
+        assert_eq!(
+            remaining(Duration::from_millis(999), Duration::from_secs(1)),
+            "00:01"
+        );
     }
 }

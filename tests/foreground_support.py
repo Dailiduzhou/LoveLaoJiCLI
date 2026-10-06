@@ -1,5 +1,6 @@
 """Foreground terminal checks with separate stdout and bounded child lifetimes."""
 import errno
+import fcntl
 import os
 from pathlib import Path
 import pty
@@ -23,14 +24,25 @@ def foreground_fixture(binary, extra_env=None):
 
         def run(args, replies=(), cancel=None, expected=0, stdout_path=None, term="xterm"):
             output_path = stdout_path or root / "stdout"
-            pid, fd = pty.fork()
+            fd, slave = pty.openpty()
+            # Snapshot before the child can run: tcgetattr after pty.fork can
+            # accidentally record the tool's already-modified attributes.
+            original = termios.tcgetattr(slave)
+            pid = os.fork()
             if pid == 0:
+                os.close(fd)
+                os.setsid()
+                fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+                for target in (0, 1, 2):
+                    os.dup2(slave, target)
+                if slave > 2:
+                    os.close(slave)
                 os.chdir(root)
                 out = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
                 os.dup2(out, 1)
                 os.close(out)
                 os.execve(binary, [binary, *args], dict(env, TERM=term))
-            original = termios.tcgetattr(fd)
+            os.close(slave)
             output = b""
             replies = list(replies)
             start = time.monotonic()
@@ -63,6 +75,18 @@ def foreground_fixture(binary, extra_env=None):
                         status = child_status
                         break
                 assert status is not None, ("hung", tool, output)
+                # waitpid may win the race with the final stderr write. Drain
+                # it before asserting that prompts/escape sequences are absent.
+                while select.select([fd], [], [], 0)[0]:
+                    try:
+                        chunk = os.read(fd, 65536)
+                    except OSError as error:
+                        if error.errno != errno.EIO:
+                            raise
+                        break
+                    if not chunk:
+                        break
+                    output += chunk
                 # No invocation changes terminal attributes, including error/signal paths.
                 assert termios.tcgetattr(fd) == original, (tool, args)
                 code = os.waitstatus_to_exitcode(status)

@@ -72,6 +72,7 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
         start = time.monotonic()
         status = None
         acted = False
+        flood_bytes = 0
         was_stopped = False
         resume_at = None
         try:
@@ -101,7 +102,7 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
                     acted = True
                 if action == "flood" and ENTER in output and elapsed < .8:
                     try:
-                        os.write(master, b"x" * 100)
+                        flood_bytes += os.write(master, b"x" * 100)
                     except BlockingIOError:
                         pass
                 if resume_at is not None and time.monotonic() >= resume_at:
@@ -118,6 +119,10 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
                     status = child_status
                     break
             assert status is not None, ("hung", action, fault, output[-2000:])
+            if action == "flood":
+                assert flood_bytes > 0, "paste scenario never injected any input"
+            elif action is not None:
+                assert acted, ("action was never delivered", action, output[-2000:])
             while select.select([master], [], [], 0)[0]:
                 try:
                     chunk = os.read(master, 65536)

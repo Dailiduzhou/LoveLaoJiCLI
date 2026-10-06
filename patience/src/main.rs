@@ -398,15 +398,21 @@ mod tests {
 
     #[test]
     fn bar_seeds_are_stable_and_distinct() {
-        assert_eq!(derive_seed(7, 0), derive_seed(7, 0));
-        let zeroth = derive_seed(7, 0);
-        for index in 1..8 {
-            assert_ne!(
-                derive_seed(7, index),
-                zeroth,
-                "bar {index} shares its stream"
-            );
+        // Pinned seed-mixer vectors, not a function compared with itself.
+        for (index, expected) in [
+            0xb5c5_555b_b913_a4ed,
+            0x67ac_3b30_0ad4_f69b,
+            0x63f9_40b8_3b47_865b,
+            0x81d7_d769_a4d6_9a96,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert_eq!(derive_seed(7, index), expected, "bar {index}");
         }
+        let seeds: std::collections::HashSet<_> =
+            (0..8).map(|index| derive_seed(7, index)).collect();
+        assert_eq!(seeds.len(), 8, "every pair of bars needs a distinct stream");
         assert_ne!(derive_seed(7, 1), derive_seed(8, 1));
     }
 }

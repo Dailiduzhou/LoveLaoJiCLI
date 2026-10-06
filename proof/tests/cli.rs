@@ -165,6 +165,7 @@ fn corrupt_unknown_locked_symlink_and_missing_identity_are_unknown_not_zero() {
     let f = Fixture::new(BIN, false);
     let path = record(&f, &f.repo, 1, state::now(), "exited", 0);
     let before = fs::read(&path).unwrap();
+    assert!(text(&run(&f).stdout).contains("completion date): 1"));
     let lock = state::lock(&store(&f).workspace_path(&f.repo).join("workspace.lock")).unwrap();
     assert!(text(&run(&f).stdout).contains("Recorded executions: unknown"));
     drop(lock);
@@ -181,7 +182,10 @@ fn corrupt_unknown_locked_symlink_and_missing_identity_are_unknown_not_zero() {
     assert!(text(&run(&f).stdout).contains("Recorded executions: unknown"));
     assert_eq!(fs::read(&victim).unwrap(), before);
     fs::remove_file(&path).unwrap();
-    fs::write(&path, &before).unwrap();
+    // Recreating with fs::write uses the host umask (often 0644), which would
+    // make the record unreadable even if the identity key were still present.
+    state::atomic(&path, &before, 0o600).unwrap();
+    assert!(text(&run(&f).stdout).contains("completion date): 1"));
     fs::remove_file(store(&f).root.join("identity.key")).unwrap();
     let before = snapshot(&f.state);
     assert!(text(&run(&f).stdout).contains("Recorded executions: unknown"));
@@ -198,15 +202,52 @@ fn working_directory_locale_and_filters_never_execute_repository_code() {
     )
     .unwrap();
     fs::set_permissions(&trap, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::write(f.repo.join(".gitattributes"), "*.rs diff=foo\n").unwrap();
+    fs::write(f.repo.join("code.rs"), "changed\n").unwrap();
+    commit(&f, ("Test", "test@localhost"), state::now(), state::now());
+    // An unsigned commit never asks gpg to verify anything. Put an inert
+    // signature into the commit object so showSignature is an active hazard.
+    let raw = f.git(&["cat-file", "commit", "HEAD"]).stdout;
+    let split = raw.windows(2).position(|bytes| bytes == b"\n\n").unwrap();
+    let mut signed = raw[..split + 1].to_vec();
+    signed.extend_from_slice(
+        b"gpgsig -----BEGIN PGP SIGNATURE-----\n dummy\n -----END PGP SIGNATURE-----\n",
+    );
+    signed.extend_from_slice(&raw[split + 1..]);
+    let object = f.root.join("signed-commit");
+    fs::write(&object, signed).unwrap();
+    let id = text(
+        &f.git(&[
+            "hash-object",
+            "-t",
+            "commit",
+            "-w",
+            object.to_str().unwrap(),
+        ])
+        .stdout,
+    );
+    f.git(&["update-ref", "HEAD", id.trim()]);
+
     f.git(&["config", "diff.external", trap.to_str().unwrap()]);
     f.git(&["config", "diff.foo.textconv", trap.to_str().unwrap()]);
     f.git(&["config", "log.showSignature", "true"]);
     f.git(&["config", "gpg.program", trap.to_str().unwrap()]);
-    fs::write(f.repo.join(".gitattributes"), "* diff=foo\n").unwrap();
+    // Positive controls prove each configured command is actually reachable.
+    let marker = f.root.join("EXECUTED");
+    for args in [
+        vec!["diff", "--ext-diff", "HEAD~1", "HEAD"],
+        vec!["diff", "--no-ext-diff", "--textconv", "HEAD~1", "HEAD"],
+        vec!["log", "-1", "--show-signature"],
+    ] {
+        f.git(&args);
+        assert!(marker.exists(), "tripwire was inert for {args:?}");
+        fs::remove_file(&marker).unwrap();
+    }
     let sub = f
         .repo
         .join(std::ffi::OsString::from_vec(b"cwd\xff".to_vec()));
     fs::create_dir(&sub).unwrap();
+    let before = snapshot(&f.root);
     let o = f
         .cmd()
         .current_dir(sub)
@@ -218,11 +259,12 @@ fn working_directory_locale_and_filters_never_execute_repository_code() {
         .unwrap();
     code(&o, 0);
     assert!(
-        text(&o.stdout).contains("本人提交（当前 HEAD，按提交时间）: 1"),
+        text(&o.stdout).contains("本人提交（当前 HEAD，按提交时间）: 2"),
         "{}",
         text(&o.stdout)
     );
-    assert!(!f.root.join("EXECUTED").exists());
+    assert!(!marker.exists());
+    assert_eq!(snapshot(&f.root), before);
 }
 
 #[test]

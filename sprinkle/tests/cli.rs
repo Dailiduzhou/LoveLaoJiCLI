@@ -66,6 +66,10 @@ fn rejects_dirty_and_unknown_resources() {
     f.git(&["branch", "sprinkle/not-owned"]);
     code(&f.run(&["undo"]), 1);
     code(&f.run(&["diff"]), 1);
+    assert_eq!(
+        f.git(&["rev-parse", "sprinkle/not-owned"]).stdout,
+        f.git(&["rev-parse", "HEAD"]).stdout
+    );
 }
 #[test]
 fn protects_edits_ignored_staged_commits_and_locks() {
@@ -118,7 +122,15 @@ fn skips_unsafe_files_and_preserves_modes() {
     .unwrap();
     fs::write(f.repo.join("unclosed.md"), "```\nhello\n").unwrap();
     symlink("/etc/passwd", f.repo.join("link.rs")).unwrap();
-    fs::set_permissions(f.repo.join("f2.rs"), fs::Permissions::from_mode(0o755)).unwrap();
+    // Make all ordinary candidates executable so at least one edited file,
+    // not merely an untouched random candidate, exercises mode preservation.
+    for i in 0..40 {
+        fs::set_permissions(
+            f.repo.join(format!("f{i}.rs")),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+    }
     f.git(&["add", "."]);
     f.git(&["commit", "-qm", "edge cases"]);
     code(&f.run(&[]), 0);
@@ -133,14 +145,34 @@ fn skips_unsafe_files_and_preserves_modes() {
         fs::read_link(copy.join("link.rs")).unwrap(),
         std::path::PathBuf::from("/etc/passwd")
     );
-    assert_eq!(
-        fs::metadata(copy.join("f2.rs"))
-            .unwrap()
-            .permissions()
-            .mode()
-            & 0o777,
-        0o755
-    );
+    let manifest: serde_json::Value = f
+        .store()
+        .read(&f.find("manifest.json").pop().unwrap())
+        .unwrap()
+        .unwrap();
+    // Unchanged unsafe files alone prove nothing: random selection may skip
+    // them even if the syntax/symlink guards have been removed.
+    assert_eq!(manifest["skipped"]["syntax-or-text"], 3);
+    assert_eq!(manifest["skipped"]["symlink"], 1);
+    let mut edited_executables = 0;
+    for file in manifest["files"].as_array().unwrap() {
+        let bytes: Vec<u8> = serde_json::from_value(file["path"].clone()).unwrap();
+        let path = cli_common::state::path_from(&bytes);
+        if file["mode"].as_u64().unwrap() & 0o777 == 0o755
+            && !file["addition"].as_str().unwrap().is_empty()
+        {
+            edited_executables += 1;
+            assert_ne!(
+                fs::read(copy.join(&path)).unwrap(),
+                fs::read(f.repo.join(&path)).unwrap()
+            );
+            assert_eq!(
+                fs::metadata(copy.join(path)).unwrap().permissions().mode() & 0o777,
+                0o755
+            );
+        }
+    }
+    assert!(edited_executables > 0);
     code(&f.run(&["undo"]), 0);
 }
 #[test]
@@ -193,14 +225,63 @@ fn zero_candidates_still_creates_managed_copy() {
 }
 #[test]
 fn resume_interrupted_undo_stages() {
-    let f = fixture();
-    code(&f.run(&[]), 0);
-    let manifest = f.find("manifest.json").pop().unwrap();
-    let store = f.store();
-    let mut m: serde_json::Value = store.read(&manifest).unwrap().unwrap();
-    m["phase"] = "restoring".into();
-    store.write(&manifest, &m).unwrap();
-    code(&f.run(&["undo"]), 0);
+    for phase in ["restoring", "removing", "removed", "deleting-ref"] {
+        let f = fixture();
+        code(&f.run(&[]), 0);
+        let copy = f.copy();
+        let manifest = f.find("manifest.json").pop().unwrap();
+        let store = f.store();
+        let mut m: serde_json::Value = store.read(&manifest).unwrap().unwrap();
+        let modified: Vec<_> = m["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|file| !file["addition"].as_str().unwrap().is_empty())
+            .collect();
+        assert!(
+            modified.len() >= 2,
+            "need both restored and unrestored files"
+        );
+        // Reconstruct real interrupted side effects, not just the phase label.
+        let restored = if phase == "restoring" {
+            1
+        } else {
+            modified.len()
+        };
+        for file in &modified[..restored] {
+            let bytes: Vec<u8> = serde_json::from_value(file["path"].clone()).unwrap();
+            let path = copy.join(cli_common::state::path_from(&bytes));
+            let content = fs::read(&path).unwrap();
+            let offset = file["offset"].as_u64().unwrap() as usize;
+            assert_eq!(
+                &content[offset..],
+                file["addition"].as_str().unwrap().as_bytes()
+            );
+            cli_common::state::atomic(
+                &path,
+                &content[..offset],
+                file["mode"].as_u64().unwrap() as u32 & 0o777,
+            )
+            .unwrap();
+        }
+        let branch = m["branch"].as_str().unwrap().to_owned();
+        if ["removed", "deleting-ref"].contains(&phase) {
+            f.git(&["worktree", "remove", copy.to_str().unwrap()]);
+        }
+        if phase == "deleting-ref" {
+            f.git(&["update-ref", "-d", &branch, m["head"].as_str().unwrap()]);
+        }
+        m["phase"] = phase.into();
+        store.write(&manifest, &m).unwrap();
+        code(&f.run(&["undo"]), 0);
+        assert!(!copy.exists(), "{phase}: copy was not removed");
+        assert!(f
+            .git(&["for-each-ref", "--format=%(refname)", &branch])
+            .stdout
+            .is_empty());
+        let done: serde_json::Value = store.read(&manifest).unwrap().unwrap();
+        assert_eq!(done["phase"], "done", "{phase}");
+    }
 }
 
 // Managed-copy lookup belongs to sprinkle, not the shared fixture.

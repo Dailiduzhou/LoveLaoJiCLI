@@ -10,6 +10,15 @@ fn invoke(args: &[&str], locales: &[(&str, &str)], extra_env: &[(&str, &str)]) -
     for key in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
         command.env_remove(key);
     }
+    for key in [
+        "PATIENCE_FAST",
+        "PATIENCE_SEED",
+        "PATIENCE_COLOR",
+        "PATIENCE_ANGLE",
+    ] {
+        command.env_remove(key);
+    }
+    command.env("PATH", "/usr/bin:/bin");
     command.envs(locales.iter().copied());
     command.envs(extra_env.iter().copied());
     command.output().expect("patience should run")
@@ -90,31 +99,37 @@ fn success_run_replays_output_and_reports_exit_zero() {
     // Not a TTY: the animated bar must not leak into piped output.
     assert!(!stdout.contains('░'), "{stdout:?}");
     assert!(!stdout.contains('\r'), "{stdout:?}");
+    assert!(
+        !output.stderr.contains(&27),
+        "animation is rendered on stderr"
+    );
+    assert!(!output.stderr.contains(&b'\r'));
 }
 
 #[test]
-fn failure_run_keeps_exit_code_and_never_fills() {
+fn failure_run_keeps_exit_code_in_plain_output() {
     let output = show(&["sh", "-c", "exit 3"], &[("LANG", "en_US.UTF-8")]);
     assert_eq!(output.status.code(), Some(3));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.contains("✗ It failed."), "{stdout:?}");
     assert!(stdout.contains("exit 3"), "{stdout:?}");
     assert!(!stdout.contains('█'), "{stdout:?}");
+    assert!(output.stderr.is_empty(), "{:?}", output.stderr);
 }
 
 #[test]
-fn slow_children_hold_the_final_stall_then_fill() {
-    // The show script is fully scripted with PATIENCE_FAST=1, so the child
-    // outlives it; the bar must park and the run still succeed.
-    let output = invoke(
-        &["sleep", "0.3"],
-        &[("LANG", "en_US.UTF-8")],
-        &[("PATIENCE_FAST", "1"), ("PATIENCE_SEED", "42")],
-    );
-    assert_eq!(output.status.code(), Some(0));
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("✓ Done!"), "{stdout:?}");
-    assert!(stdout.contains("exit 0"), "{stdout:?}");
+fn terminal_progress_holds_until_child_exit_and_fills_only_on_success() {
+    // output() pipes stderr and disables the animation entirely. Observe real
+    // PTY frames and release the child only after the final hold is visible.
+    let output = Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/progress_pty.py"
+        ))
+        .arg(BIN)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
 }
 
 #[test]
@@ -138,16 +153,33 @@ fn missing_child_reports_spawn_failure() {
 }
 
 #[test]
-fn oversized_child_output_is_capped_and_noted() {
+fn oversized_child_output_is_capped_per_stream_and_noted() {
     let output = show(
-        &["head", "-c", "3000000", "/dev/zero"],
+        &["python3", "-c", "import sys; sys.stdout.buffer.write(b'o'*3000000); sys.stderr.buffer.write(b'e'*3000000)"],
         &[("LANG", "en_US.UTF-8")],
     );
     assert_eq!(output.status.code(), Some(0));
-    assert!(output.stdout.len() >= 1024 * 1024);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("truncated"), "{stdout:?}");
-    assert!(stdout.contains("✓ Done!"), "{stdout:?}");
+    let cap = 1024 * 1024;
+    let note = "\n(child output exceeded 1 MiB and was truncated)\n";
+    assert!(
+        (cap..cap + 200).contains(&output.stdout.len()),
+        "stdout cap was not enforced"
+    );
+    assert_eq!(
+        output.stderr.len(),
+        cap + note.len(),
+        "stderr cap was not enforced"
+    );
+    assert_eq!(&output.stdout[..cap], vec![b'o'; cap]);
+    assert_eq!(&output.stderr[..cap], vec![b'e'; cap]);
+    let tail = String::from_utf8(output.stdout[cap..].to_vec()).unwrap();
+    assert!(tail.starts_with(note), "{tail:?}");
+    assert!(
+        tail.contains("✓ Done!") && tail.contains("exit 0"),
+        "{tail:?}"
+    );
+    assert!(tail.len() < 200, "extra child bytes escaped the cap");
+    assert_eq!(&output.stderr[cap..], note.as_bytes());
 }
 
 #[test]
@@ -172,6 +204,8 @@ fn nested_patience_runs_the_real_child_behind_extra_bars() {
     // Not a TTY: none of the stacked bars leak into piped output.
     assert!(!stdout.contains('\r'), "{stdout:?}");
     assert!(!stdout.contains('░'), "{stdout:?}");
+    assert!(output.stderr.is_empty(), "{:?}", output.stderr);
+    assert_eq!(stdout.lines().filter(|line| *line == "nested").count(), 1);
 }
 
 #[test]
@@ -182,8 +216,9 @@ fn deeply_nested_patience_keeps_one_real_child() {
     );
     assert_eq!(output.status.code(), Some(0));
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("ok"), "{stdout:?}");
-    assert!(stdout.contains("✓ 成了！"), "{stdout:?}");
+    assert_eq!(stdout.lines().filter(|line| *line == "ok").count(), 1);
+    assert_eq!(stdout.matches("✓ 成了！").count(), 1);
+    assert!(output.stderr.is_empty(), "{:?}", output.stderr);
 }
 
 #[test]
