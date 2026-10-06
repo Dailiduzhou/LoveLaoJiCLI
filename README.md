@@ -127,8 +127,8 @@ love、happiness、joy 不提供子命令或其他参数。No subcommands or add
   Exit codes pass through from the child (128+N on signals); Ctrl+C reaches the child via the shared process group.
 - 子进程输出被捕获（每流上限 1MiB），进度条结束后回放。
   Child output is captured (1 MiB per stream) and replayed after the bar.
-- 进度条是彩虹跑马灯：调色板取自 `colors.png` 的无缝循环渐变，色带界线默认斜 45°，每帧滑动一格；填充段为动画彩虹，空段仍是灰色 `░`。
-  The bar is a rainbow marquee: a seamless looping palette sampled from `colors.png`, band boundaries slanted 45° by default, sliding one cell per frame; the filled part is the animated rainbow, the empty part stays gray `░`.
+- 进度条是彩虹跑马灯：调色板是 13 个锚点组成的无缝循环渐变，色带界线默认斜 45°，每帧滑动一格；填充段为动画彩虹，空段仍是灰色 `░`。
+  The bar is a rainbow marquee: a seamless looping palette of 13 anchors, band boundaries slanted 45° by default, sliding one cell per frame; the filled part is the animated rainbow, the empty part stays gray `░`.
 - 按终端能力自动降级：真彩 → 256 色 → 16 色 → 无色原样；尊重 `NO_COLOR` 与 `TERM=dumb`，非 TTY 照旧不渲染。
   Colors degrade with the terminal's capability: truecolor → 256 → 16 → plain; `NO_COLOR` and `TERM=dumb` are honored, and non-TTY runs still render nothing.
 - 特判：前缀每多写一个 `patience` 记号，就同时多显示一条独立演出的进度条，真实命令仍是它们之后的那个（`patience patience sleep 3` 同时显示两条）。

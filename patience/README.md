@@ -43,7 +43,7 @@ While stalled, a localized comfort message plays: a shuffled deck, drawn in orde
 
 ## The rainbow marquee
 
-The palette is sampled from the seamless looping gradient in `colors.png`: 13 anchors, the bar width spans exactly one full rainbow cycle.
+The palette is a seamless loop of 13 anchors: the bar width spans exactly one full rainbow cycle.
 
 Band boundaries slant 45° by default: each cell is a `▀` half-block carrying two colors, sampled as `color(x, y) = palette(x + k·y + phase)` — in a 2:1 cell grid `k = cot(45°) = 1` gives exactly a 45° edge. The phase advances one cell per tick (a full rainbow slides past in ~1.5s), so even a still screenshot shows the slant.
 

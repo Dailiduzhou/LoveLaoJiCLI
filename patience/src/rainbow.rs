@@ -1,5 +1,5 @@
-//! The rainbow marquee: a looping palette sampled from `colors.png`, diagonal
-//! color-band boundaries rendered through half-block cells, and a full
+//! The rainbow marquee: a looping palette, diagonal color-band
+//! boundaries rendered through half-block cells, and a full
 //! color-capability fallback cascade (truecolor → 256 → 16 → plain).
 //!
 //! The bar paints `color(x, y) = palette(x + k·y + phase)` where each cell is
@@ -14,9 +14,8 @@ use crate::plan::BAR_WIDTH;
 /// the bar spans exactly one rainbow cycle at any moment.
 pub const PERIOD: f64 = BAR_WIDTH as f64;
 
-/// Palette anchors sampled from colors.png, pinned at their position in the
-/// cycle. The first and last yellow are the same color, so the loop closes
-/// without a seam.
+/// Palette anchors, pinned at their position in the cycle. The first and last
+/// yellow are the same color, so the loop closes without a seam.
 const STOPS: [(f64, [u8; 3]); 13] = [
     (0.00, [244, 207, 90]),
     (0.13, [193, 239, 104]),
@@ -330,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn palette_wraps_and_matches_colors_png() {
+    fn palette_wraps_and_matches_the_anchors() {
         assert_eq!(sample(0.0), [244, 207, 90]);
         assert_eq!(sample(PERIOD), [244, 207, 90]);
         assert_eq!(sample(0.13 * PERIOD), [193, 239, 104]);
