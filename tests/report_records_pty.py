@@ -74,7 +74,7 @@ with tempfile.TemporaryDirectory(prefix="reports-pty-") as temp:
     assert not (root / "state").exists()
     cmd = ["sh", "-c", "printf ran"]
     wrapper("enough", cmd, 0)
-    assert b"already passed" in wrapper("enough", cmd, 0)
+    assert b"This invocation was skipped." in wrapper("enough", cmd, 0)
     out = report("proof")
     assert completed + b"1" in out.splitlines(), out
     assert successful + b"1" in out.splitlines(), out

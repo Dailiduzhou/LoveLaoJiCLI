@@ -19,12 +19,14 @@ comparable. The next invocation must match canonical cwd, byte-preserving argv
 boundaries and the same snapshot. Within **five minutes of real completion**,
 it may skip execution, returning 0 with empty stdout and a stderr notice:
 
-1. `It already passed.`
-2. `Nothing changed.`
-3. `enough.`
-4. `no.` (also subsequent skips)
+```text
+A recent matching run succeeded; no code change was observed. This invocation was skipped.
+To run again, use enough --again <command> [args...].
+```
 
-Notices have Chinese equivalents. Skips increment only the notice counter: they
+Every skip uses the same two-line localized notice; it does not claim a new test
+result or echo potentially sensitive child arguments. Skips retain the compatible
+notice counter: they
 never refresh the completion time or create a successful CommandRun. Clock
 rollback/future records invalidate eligibility. `--again` always runs; failure,
 spawn failure, interruption or an unstable snapshot invalidates old success.

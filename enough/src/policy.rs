@@ -13,11 +13,11 @@ fn recent(completed: u64, now: u64) -> bool {
     now.checked_sub(completed).is_some_and(|age| age <= 300)
 }
 
-fn reminder(count: u32, language: Language) -> &'static str {
-    let en = ["It already passed.", "Nothing changed.", "enough.", "no."];
-    let zh = ["已经通过了。", "没有观察到变化。", "够了。", "不必了。"];
-    let index = (count.clamp(1, 4) - 1) as usize;
-    language.text(en[index], zh[index])
+fn reminder(language: Language) -> &'static str {
+    language.text(
+        "A recent matching run succeeded; no code change was observed. This invocation was skipped.\nTo run again, use enough --again <command> [args...].",
+        "最近一次已成功执行，未观察到代码变化；本次未执行。\n如需再次运行，请使用 enough --again <命令> [参数...]。",
+    )
 }
 
 impl Policy for Enough {
@@ -29,7 +29,7 @@ impl Policy for Enough {
             Decision::Skip {
                 count,
                 code: 0,
-                message: reminder(count, Language::detect()),
+                message: reminder(Language::detect()),
             }
         } else {
             Decision::Run
@@ -115,16 +115,12 @@ mod tests {
     }
 
     #[test]
-    fn reminders_are_localized_and_saturate() {
-        for (count, en, zh) in [
-            (1, "It already passed.", "已经通过了。"),
-            (2, "Nothing changed.", "没有观察到变化。"),
-            (3, "enough.", "够了。"),
-            (4, "no.", "不必了。"),
-            (u32::MAX, "no.", "不必了。"),
-        ] {
-            assert_eq!(reminder(count, Language::English), en);
-            assert_eq!(reminder(count, Language::Chinese), zh);
+    fn reminders_always_explain_the_skip_and_existing_override() {
+        assert!(reminder(Language::English).contains("This invocation was skipped."));
+        assert!(reminder(Language::Chinese).contains("本次未执行。"));
+        for l in [Language::English, Language::Chinese] {
+            assert!(reminder(l).contains("enough --again <"));
+            assert_eq!(reminder(l).lines().count(), 2);
         }
     }
 }
