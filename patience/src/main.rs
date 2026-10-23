@@ -8,11 +8,12 @@
 //! exit code passes through.
 
 mod curve;
+mod layout;
 mod messages;
 mod plan;
 mod rainbow;
 
-use std::io::{IsTerminal, Read, Write};
+use std::io::{Read, Write};
 use std::process::{Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
@@ -95,9 +96,9 @@ fn run() -> i32 {
     // SIGINT to both of us directly. We die with 128+2, the child gets its
     // signal, and no orphans are left behind.
     let show_start = Instant::now();
-    let animate = std::io::stderr().is_terminal();
+    let mut animation = layout::detect(bars, language);
     let style = Style::detect();
-    if animate {
+    if animation.is_some() {
         rainbow::prepare_terminal(&style);
     }
     let mut status: Option<ExitStatus> = None;
@@ -114,10 +115,7 @@ fn run() -> i32 {
         for show in &mut shows {
             show.advance(elapsed);
         }
-        if animate {
-            render(&style, &shows, elapsed / tick, redrawn);
-            redrawn = true;
-        }
+        redraw(&mut animation, &style, &shows, elapsed / tick, &mut redrawn);
         if status.is_some() && elapsed >= min_show {
             break;
         }
@@ -135,21 +133,23 @@ fn run() -> i32 {
     let code = exit_code(&status);
     let success = status.success();
 
-    if animate {
+    if animation.is_some() {
         if success {
             // The victory lap: every bar sprints from wherever it is to 100%.
             let step = 100.0 / BAR_WIDTH as f64;
-            while shows.iter().any(|show| show.progress < 100.0) {
+            while animation.is_some() && shows.iter().any(|show| show.progress < 100.0) {
                 for show in &mut shows {
                     show.progress = (show.progress + step).min(100.0);
                 }
                 let phase = show_start.elapsed().as_secs_f64() / tick;
-                render(&style, &shows, phase, true);
+                redraw(&mut animation, &style, &shows, phase, &mut redrawn);
                 std::thread::sleep(Duration::from_secs_f64(fill_frame));
             }
         }
         // Retire the bars: on failure they stay parked where they stalled.
-        eprintln!();
+        if animation.is_some() {
+            eprintln!();
+        }
     }
 
     let (stdout, stdout_truncated) = stdout_capture.join().expect("stdout capture");
@@ -315,7 +315,30 @@ fn replay(bytes: &[u8], truncated: bool, language: Language, to_stdout: bool) {
 /// paints all the lines, later frames climb back up with a cursor escape and
 /// repaint. Each bar's rainbow phase is spread across the palette so stacked
 /// bars never look like copies.
-fn render(style: &Style, shows: &[Show], phase: f64, redrawn: bool) {
+fn redraw(
+    animation: &mut Option<(layout::Size, layout::Layout)>,
+    style: &Style,
+    shows: &[Show],
+    phase: f64,
+    redrawn: &mut bool,
+) {
+    let Some((size, layout)) = *animation else {
+        return;
+    };
+    // Any observed resize invalidates the old region. Never climb/erase by
+    // stale coordinates, and never restart animation during this invocation.
+    if layout::terminal_size() != Some(size) {
+        *animation = None;
+        if *redrawn {
+            eprintln!();
+        }
+        return;
+    }
+    render(style, shows, phase, *redrawn, layout);
+    *redrawn = true;
+}
+
+fn render(style: &Style, shows: &[Show], phase: f64, redrawn: bool, layout: layout::Layout) {
     let bars = shows.len();
     let mut frame = String::new();
     if redrawn && bars > 1 {
@@ -330,7 +353,8 @@ fn render(style: &Style, shows: &[Show], phase: f64, redrawn: bool) {
             style,
             show.progress,
             phase + offset,
-            show.message,
+            if layout.message { show.message } else { "" },
+            layout.bar_width,
         ));
     }
     let mut stderr = std::io::stderr().lock();

@@ -1,5 +1,8 @@
 """Observe actual animated stderr; a pipe keeps the real child alive until release."""
 import errno
+import fcntl
+import struct
+import termios
 import os
 from pathlib import Path
 import pty
@@ -21,6 +24,7 @@ with tempfile.TemporaryDirectory(prefix="patience-progress-") as temp:
 
     def run(exit_code, nested=0):
         master, slave = pty.openpty()
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 120, 0, 0))
         marker = Path(temp) / f"child-{exit_code}-{nested}"
         args = [binary, *(["patience"] * nested), "sh", "-c",
                 'printf "started\\n" >> "$1"; printf "CHILD_OUT\\n"; read reply; exit "$2"',

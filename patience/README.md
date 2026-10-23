@@ -26,8 +26,8 @@ When the command itself starts with `--` (e.g. `patience -- git status`), one `-
 - No nested process is spawned: the inner one's stderr would be captured into the outer pipe, never a TTY, so its bar would never render — "multiple bars at once" would be impossible. All bars are drawn by the outermost process, sharing the one real child.
 - Every bar performs independently: its own curve, stalls and comfort messages. The random seed is mixed with the bar index (splitmix64), so a fixed `PATIENCE_SEED` reproduces every bar frame by frame.
 - Rainbow phases are spread by bar index (`index × 30 / bars`), so stacked bars never look like photocopies.
-- Repaint climbs back with `\x1b[{N-1}A`; with a single bar it degrades to the exact byte-identical single-line refresh of old.
-- No depth cap: it is your command line — nest as deep a waterfall as you like.
+- Repaint climbs back with `\x1b[{N-1}A` only while the original bounded region is trustworthy; a single bar uses a carriage return.
+- No CLI depth cap, but bars that would fill/exceed terminal height disable animation; the one real command still runs.
 
 ## The random show
 
@@ -54,6 +54,26 @@ Colors degrade with the terminal: truecolor → 256 → 16 → plain, honoring `
 - The exit code passes through untouched (128+N on signals); a missing command exits 127; no command at all exits 2.
 - Child output is captured per stream (1 MiB cap), replayed after the show, with a note when truncated.
 - Not a TTY: no animation at all, just the replay and the result line — pipes and CI stay clean.
+
+## Bounded layout and fallback
+
+Animation reads **stderr's** terminal size with rustix, without external helpers
+or cursor queries. It reserves one column and one row, keeps the full percentage,
+omits comfort text before shrinking the normal 30-cell bar (minimum eight cells).
+The finite builtin deck has conservative cell budgets for Chinese and ambiguous
+punctuation; this is not a general Unicode-width library. Sampling changes with
+bar width, not the random script, stalls or child result.
+
+Missing/unsupported TERM, unknown/too-small dimensions, too many bars or non-TTY
+stderr use plain replay/results without animation escapes. Any observed resize
+permanently stops animation for that invocation: no upward erase using old
+coordinates and no restart after enlargement. Terminal reflow of already drawn
+content is outside the guarantee. Nonempty `NO_COLOR` disables color, not otherwise
+safe cursor controls. Real child output is never cropped for layout.
+
+`cargo test -p patience` includes `tests/layout_pty.py`: 20/24/40/80/120 columns,
+both locales, multiple bars, height/TERM fallbacks, resize, color levels and the
+original unscaled Chinese 40-column `sleep 8` reproduction.
 
 ## Test hooks
 

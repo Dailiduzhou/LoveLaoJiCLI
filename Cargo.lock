@@ -772,6 +772,7 @@ dependencies = [
  "clap",
  "cli-common",
  "rand",
+ "rustix",
 ]
 
 [[package]]

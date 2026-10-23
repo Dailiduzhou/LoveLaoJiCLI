@@ -133,6 +133,16 @@ fn terminal_progress_holds_until_child_exit_and_fills_only_on_success() {
 }
 
 #[test]
+fn terminal_layout_is_bounded_and_resize_permanently_disables_animation() {
+    let output = Command::new("python3")
+        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/layout_pty.py"))
+        .arg(BIN)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+}
+
+#[test]
 fn signal_death_maps_to_128_plus_signal() {
     let output = show(&["sh", "-c", "exec kill -9 $$"], &[("LANG", "en_US.UTF-8")]);
     assert_eq!(output.status.code(), Some(137));
