@@ -98,6 +98,20 @@ fn locale_precedence_and_non_utf8_cwd() {
     }
 }
 #[test]
+#[ignore = "known canonical-buffer overflow; shared terminal-input design approval required"]
+fn long_interactive_input_contract() {
+    let output = std::process::Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/long_input_pty.py"
+        ))
+        .arg(BIN)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stdout));
+}
+
+#[test]
 fn foreground_questions_and_cancellation() {
     let status = std::process::Command::new("python3")
         .arg(concat!(

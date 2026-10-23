@@ -4,6 +4,35 @@ use std::fs;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use support::*;
 const BIN: &str = env!("CARGO_BIN_EXE_later");
+
+fn input_pty(long: bool) {
+    let mut command = std::process::Command::new("python3");
+    command
+        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/input_pty.py"))
+        .arg(BIN);
+    if long {
+        command.arg("--long");
+    }
+    let output = command.output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        text(&output.stdout),
+        text(&output.stderr)
+    );
+}
+
+#[test]
+fn interactive_input_preserves_tool_boundaries() {
+    input_pty(false);
+}
+
+#[test]
+#[ignore = "known canonical-buffer overflow; shared terminal-input design approval required"]
+fn long_interactive_input_contract() {
+    input_pty(true);
+}
+
 #[test]
 fn cli_basics() {
     basics(BIN, "later");

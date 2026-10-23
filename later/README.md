@@ -55,5 +55,21 @@ records. No telemetry or background collection.
 cargo test -p later
 ```
 
+## Known long-input limitation
+
+Interactive input still uses the system canonical line buffer, whose **byte**
+capacity can be smaller than the application's character limit. Long pastes can
+lose bytes/newlines or wait indefinitely; macOS reproduces this with 600 Chinese
+characters in duck. This is **not fixed** by application length validation.
+For long answers use explicit `--next` values (never secrets); a pipe is not
+an interactive answer. Ctrl+C cancels a stuck prompt. A safe shared input redesign
+needs separate lifecycle/dependency approval; afk's cbreak code is not reused here.
+
+The opt-in known-failing regression is
+`cargo test -p later long_interactive_input_contract -- --ignored --nocapture`.
+It is ignored by the normal suite, not counted as passed. It covers canonical
+buffer and character limits with generated ASCII/CJK/mixed pastes and chunked input.
+See [ROADMAP.md](../ROADMAP.md).
+
 Integration tests require Git; all fixtures isolate HOME/state. Terminal-independent
 operation works without DISPLAY, Wayland, clipboard or desktop services.

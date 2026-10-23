@@ -21,6 +21,22 @@ most 512 Unicode characters. Invalid explicit values exit 2. Wrapper flags must
 precede the child, whose argv remains unchanged; shell syntax requires explicit
 `sh -c`. Help/version/`--verison` and messages follow the common locale contract.
 
+## Known long-input limitation
+
+Interactive input still uses the system canonical line buffer, whose **byte**
+capacity can be smaller than the application's character limit. Long pastes can
+lose bytes/newlines or wait indefinitely; macOS reproduces this with 600 Chinese
+characters in duck. This is **not fixed** by application length validation.
+For long answers use explicit `--hypothesis` values (never secrets); a pipe is not
+an interactive answer. Ctrl+C cancels a stuck prompt. A safe shared input redesign
+needs separate lifecycle/dependency approval; afk's cbreak code is not reused here.
+
+The opt-in known-failing regression is
+`cargo test -p stuck long_interactive_input_contract -- --ignored --nocapture`.
+It is ignored by the normal suite, not counted as passed. It covers canonical
+buffer and character limits with generated ASCII/CJK/mixed pastes and chunked input.
+See [ROADMAP.md](../ROADMAP.md).
+
 ## Exact failure identity
 
 The signature includes cwd/argv digest, a stable Git code snapshot, ordinary
