@@ -1,10 +1,10 @@
 # 实施状态与后续路线图 / Implementation status and roadmap
 
 本文件统一记录**已实现、当前限制、待补验收、后续实现**，不是所有设想都已上线的功能清单。
-首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.5.0`（第三批及 afk TUI）。后续交付应同步更新本文件。
-This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.5.0` (batch three and afk TUI).
+首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.5.1`（第三批及 afk TUI）。后续交付应同步更新本文件。
+This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.5.1` (batch three and afk TUI).
 
-- 当前接口与行为：[README.md](README.md) 及各工具双语 README。
+- 当前接口与行为：[中文 README](README-zh.md) / [English README](README.md) 及各工具对应语言 README。
 - 开发约束：[AGENTS.md](AGENTS.md)；业务参数、依赖准入和版本同步以该文件为准。
 - 本地 `project.md` 保留原始构想与详细规格，当前未纳入版本控制；本路线图独立保留后续 MVP 边界，不要求读者拥有该文件。
 - **“已实现”不等于全部平台和故障矩阵均已验收。**下面明确区分已有测试与待补项目。
@@ -18,7 +18,7 @@ All fourteen tools are workspace members and installer entries, independently us
 
 | 批次 / Batch | 工具 / Tool | 当前范围 / Current scope | 文档 / Docs |
 |---|---|---|---|
-| 原有 / Existing | `love`、`happiness`、`joy` | 各输出一句本地化祝福；没有业务参数 / One localized blessing each; no business options | [根 README](README.md) |
+| 原有 / Existing | `love`、`happiness`、`joy` | 各输出一句本地化祝福；没有业务参数 / One localized blessing each; no business options | [中文](README-zh.md) · [English](README.md) |
 | 原有 / Existing | `patience` | 真实命令的假进度条；退出码透传、非 TTY 降级 / Fake progress wrapper with exit passthrough and non-TTY fallback | [中文](patience/README-zh.md) · [English](patience/README.md) |
 | 第一批 1 / Batch 1.1 | `sprinkle` | 默认/worktree 创建隔离 HEAD 副本；EOF 注释、保存时 diff、校验式 undo / Isolated HEAD copy, EOF comments, saved diff, verified undo | [中文](sprinkle/README-zh.md) · [English](sprinkle/README.md) |
 | 第一批 2 / Batch 1.2 | `later` | 一张最新上下文卡片；交互、`--next`、`resume` / One latest context card, interactive or explicit input, resume | [中文](later/README-zh.md) · [English](later/README.md) |
@@ -55,13 +55,14 @@ These are current boundaries, not promises that future features already exist.
 
 | 领域 / Area | 当前边界 / Current boundary |
 |---|---|
-| 平台 / Platforms | 目标为 Linux、macOS、WSL Linux 用户空间；已有本轮执行证据来自 Linux，其他平台仍需验证；不承诺原生 Windows / Linux validation recorded; macOS/WSL validation pending; no native Windows promise |
+| 平台 / Platforms | 目标为 Linux、macOS、WSL Linux 用户空间；保留历史 Linux 证据，本次补充 macOS 自动化（见 3.6）；WSL/GUI 目视仍待验证；不承诺原生 Windows / Historical Linux plus current macOS automation (3.6); WSL/GUI acceptance pending; no native Windows promise |
 | Git 快照 / Snapshots | 20,000 条目、累计读取 256 MiB、5 秒扫描预算；不是文件系统事务，不包含忽略文件、环境、外部服务或时间 / Budgeted, nontransactional, excludes ignored/external state |
 | 包装器 / Wrappers | 非 Git、状态/锁/指纹故障、stdin 不可比较或无法确认前台交互时真实执行；不将未知当相同 / Fail open when comparison is unreliable |
 | 流与信号 / Streams and signals | `stuck` 子命令看到管道，不是透明 PTY；共享前台进程组不约束故意 daemonize 的后代 / Pipes, not a PTY; deliberate daemonization is outside the guarantee |
 | Sprinkle 创建 / Creation | 源 checkout 必须干净；当前保守拒绝子模块、配置了 checkout/clean 过滤器（含全局 LFS）的仓库、reftable-only reflog；副本是 HEAD，不是磁盘备份 / Clean HEAD copies only, with conservative repository exclusions |
 | Sprinkle 插入 / Insertion | 只考虑安全 EOF，固定 25% 选择、每文件最多一条、总计最多 100 条；不保证任意仓库可编译 / Conservative EOF-only comments, not a compilation guarantee |
 | Sprinkle 撤销 / Undo | 新提交、用户编辑、额外产物、身份/清单不确定时拒绝；未知中间态需人工检查；已完成清单作为已撤销记录保留 / Refuse uncertain deletion; some partial states need manual inspection; completed manifests remain as tombstones |
+| 交互长输入 / Long prompts | `duck/later/stuck` 仍用 canonical 行缓冲，字节上限可早于字符上限；长粘贴可能挂住/损坏，尚未修复；请用显式参数，见修复方案 / Canonical-buffer overflow remains unresolved; use explicit answer options |
 | One 输入 / Input | 管道/文件读取等待 EOF，上限 1 MiB UTF-8、过滤后 1,000 项；不是完整 Markdown parser。持久化列表全局最多 1,000 项 / Bounded, EOF-terminated temporary input; one global persistent list |
 | Afk 终端 / Terminal | 同一前台 TTY、非空/non-dumb TERM、至少 24×10 时启用 TUI，支持分区色/彩虹/全白；其他启动环境安静降级。SIGKILL/外部 SIGSTOP/abort/终端断连无法保证恢复 / Foreground suitable-terminal TUI; conservative startup fallback; uncatchable/aborting/disconnected paths cannot guarantee cleanup |
 | 只读报告 / Read-only reports | Git/时区/记录不可用时显示未知，已有共享锁争用不写状态；不是全部 shell 命令审计日志 / Unavailable sources remain unknown; existing shared locks never create state; not a complete shell audit |
@@ -193,6 +194,37 @@ macOS/WSL、真实终端模拟器目视验收与全部 I/O 故障时序仍待补
 硬件故障与不可写/消失终端不属于可靠清理保证，不宣称完成所有信号/平台矩阵。
 The failure hook is documented but absent from help. macOS/WSL, emulator visual checks and exhaustive I/O timing remain pending; uncatchable/aborting/disconnected paths are explicitly outside cleanup guarantees.
 
+### 3.6 实测修复方案实施 / Improvement-plan implementation
+
+本轮实施已有工具的加固；不新增 `morning`，
+不放宽状态安全，也不为共享问答引入 afk 专属的 signal-hook/libc。
+Existing-tool hardening only; morning and expanded shared terminal-control dependencies are not approved here.
+
+- `patience` 增加 stderr 尺寸预算、有限文案宽度、窄屏/高度/未知 TERM 降级及检测缩放后永久停止动画；随机计划和一次真实执行不变。
+- `later resume` 下一步前置、粗粒度经过时间、空/未知 diff 区分、分支简化和上下文提醒；schema/完整 HEAD/旧记录保持。
+- `enough` 每次明确跳过及 `--again` 入口，不回显真实 argv；旧提醒计数兼容。
+- `one` 区分持久化空列表/临时空输入，保持临时选择不访问状态。
+- 测试先探测非 UTF-8 名称能力，仅 EILSEQ 报告该能力跳过，其他断言使用 UTF-8 名称继续；其他 I/O 故障仍失败。可信临时路径 resolve；产品仍拒绝符号链接，诊断提示 HOME/XDG。
+- [PTY 控制器](tests/pty_support.py) 保持会话存活至检查完成，回收进程组并避免 macOS EOF/tty-drain 死等；Darwin 内核 PENDIN 通过空队列非阻塞读取处理后比较全部 termios，不屏蔽差异或修改恢复后的设置。
+- `afk` 补原生 macOS PTY、常见尺寸与缩小再放大，不扩展产品功能。
+
+本次实际环境：macOS/Apple Silicon（Darwin 25.6.0）、rustc 1.99.1、Python 3.15.0。
+Actual current checks on that environment:
+
+- `cargo build --workspace --locked`、fmt check、clippy all-targets `-D warnings`、`git diff --check` 通过。
+- `cargo test --locked --workspace`：**191 passed，0 failed，3 ignored**。三个 ignored 是已知未修复长输入契约，**不计为通过**。文件系统拒绝的非 UTF-8 名称子场景也不计为覆盖通过；locale/控制字符/业务断言继续运行。
+- `patience/tests/layout_pty.py`：20/24/40/80/120 列、中英文、单/双条、高度/未知尺寸/TERM、缩放、颜色；包含未启用 FAST 的 40 列中文 seed 7 / sleep 8。
+- `python3 tests/report_records_pty.py target/debug` 通过：enough 跳过、stuck 拦截均不增加 proof 真实执行统计，报告只读。
+- 安装器隔离测试 **25 项通过**；未修改 install.sh，不新增安装入口或发布标签。
+- 单独运行 duck/later/stuck 的 600 汉字 smoke 复现均超时；其中 stuck 为超出 512 字符的无效输入，仍应拒绝而非挂住。
+- [canonical 诊断](tests/canonical_buffer_probe.py) 的 macOS 结果：ASCII 发送 601 字节、收到 601（含换行、有效 UTF-8）；600 汉字发送 1801 字节，队列只保留 1024 字节、无换行、UTF-8 无效。这是实际队列字节证据，不只依据回显。
+
+上述不是所有矩阵已完成：本次未跑 Linux/WSL、GUI 字体/深浅主题/像素截图、长时间与所有 I/O/信号竞态；
+历史 Linux 结果不冒充本次重新验收。完整长输入矩阵留有明确 opt-in 回归命令，尚未全部执行。
+安全非规范输入设计与权限/依赖审批（B1）、跨平台/GUI 补验（D）、morning 立项（E）仍待后续确认。
+Current macOS automation is not Linux/WSL or GUI pixel acceptance. Long-input redesign remains unresolved;
+opt-in failures are separate from the passing normal suite, and morning remains a proposal.
+
 ## 4. 第二批：本轮交付 / Batch two: delivered this round
 
 **已按 `duck → one → afk` 实现独立 crate、测试、文档和安装入口；afk 后续加入经评估的最小 TUI，保留降级。**
@@ -280,7 +312,7 @@ Reports are genuinely read-only; optional calendar support is narrowly scoped. E
 - [ ] 新增自己的 crate、源码与集成测试；只抽取本轮真正复用的公共能力。
 - [ ] 覆盖 locale 优先级、help/version/verison、非 UTF-8 路径、无 TTY、失败/取消及适用的状态/并发场景。
 - [ ] 同步 workspace members、统一版本、Cargo.lock、安装/卸载清单及安装测试。
-- [ ] 同步根 README、工具英文 README.md/中文 README-zh.md、AGENTS 与本路线图；未来参数不能写进已支持接口。
+- [ ] 同步根及工具英文 README.md/中文 README-zh.md、AGENTS 与本路线图；未来参数不能写进已支持接口。
 - [ ] 执行第 3.1 节检查命令，记录平台和结果；未验证项明确保留，不用“已实现”替代测试证据。
 
 Deliver one independently usable tool at a time, updating code, tests, installer, versioned dependencies and bilingual documentation together.

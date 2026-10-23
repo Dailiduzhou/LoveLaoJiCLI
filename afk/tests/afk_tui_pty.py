@@ -14,6 +14,9 @@ import tempfile
 import termios
 import time
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
+from pty_support import PtySession, assert_restored
+
 binary = str(Path(sys.argv[1]).resolve())
 ENTER = b"\x1b[?1049h"
 LEAVE = b"\x1b[?1049l"
@@ -30,44 +33,32 @@ def size(fd, rows, columns):
 
 
 with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
+    temp = str(Path(temp).resolve())
     env = dict(os.environ, HOME=temp, XDG_STATE_HOME=str(Path(temp) / "state"),
                TERM="xterm", LC_ALL="C", NO_COLOR="1", AFK_FAST="1")
     env.pop("AFK_TEST_FAILURE", None)
 
     def run(action=None, fault=None, expected=0, term="xterm", dimensions=(18, 60),
             duration="100s", chinese=False, suspend_for=None, no_color="1", color=None):
-        master, slave = pty.openpty()
+        def configure(slave):
+            original = termios.tcgetattr(slave)
+            original[0] &= ~termios.IXON
+            termios.tcsetattr(slave, termios.TCSANOW, original)
+        child_env = dict(env, TERM=term)
+        if no_color is None:
+            child_env.pop("NO_COLOR", None)
+        else:
+            child_env["NO_COLOR"] = no_color
+        if fault:
+            child_env["AFK_TEST_FAILURE"] = fault
+        if chinese:
+            child_env["LC_ALL"] = "zh_CN"
+        session = PtySession([binary, duration] + (["--color", color] if color else []),
+                             child_env, temp, dimensions=dimensions, configure=configure)
+        master, slave, pid = session.master, session.slave, session.worker
+        original = session.original
         if action == "flood":
-            # Never block a paste past the injection window: a blocking write
-            # can resume after afk's final flush and inject new input at the shell.
             os.set_blocking(master, False)
-        size(slave, *dimensions)
-        original = termios.tcgetattr(slave)
-        # Verify exact restoration of non-default attributes, not merely ECHO on.
-        original[0] &= ~termios.IXON
-        termios.tcsetattr(slave, termios.TCSANOW, original)
-        original = termios.tcgetattr(slave)
-        pid = os.fork()
-        if pid == 0:
-            os.chdir(temp)
-            resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-            os.close(master)
-            os.setsid()
-            fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
-            for fd in (0, 1, 2):
-                os.dup2(slave, fd)
-            if slave > 2:
-                os.close(slave)
-            child_env = dict(env, TERM=term)
-            if no_color is None:
-                child_env.pop("NO_COLOR", None)
-            else:
-                child_env["NO_COLOR"] = no_color
-            if fault:
-                child_env["AFK_TEST_FAILURE"] = fault
-            if chinese:
-                child_env["LC_ALL"] = "zh_CN"
-            os.execve(binary, [binary, duration] + (["--color", color] if color else []), child_env)
         output = b""
         start = time.monotonic()
         status = None
@@ -75,6 +66,7 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
         flood_bytes = 0
         was_stopped = False
         resume_at = None
+        enlarged = False
         try:
             while time.monotonic() - start < 8:
                 if select.select([master], [], [], .01)[0]:
@@ -100,25 +92,30 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
                     elif isinstance(action, int):
                         os.kill(pid, action)
                     acted = True
+                if action == "resize" and acted and not enlarged and elapsed > .4:
+                    size(slave, 18, 60)
+                    os.kill(pid, signal.SIGWINCH)
+                    enlarged = True
                 if action == "flood" and ENTER in output and elapsed < .8:
                     try:
                         flood_bytes += os.write(master, b"x" * 100)
                     except BlockingIOError:
                         pass
                 if resume_at is not None and time.monotonic() >= resume_at:
-                    assert termios.tcgetattr(slave) == original
+                    assert_restored(slave, original)
                     os.kill(pid, signal.SIGCONT)
                     resume_at = None
-                child, child_status = os.waitpid(pid, os.WNOHANG | os.WUNTRACED)
+                child, child_status = session.poll()
                 if child and os.WIFSTOPPED(child_status):
                     assert action == "suspend", (action, child_status)
-                    assert termios.tcgetattr(slave) == original, "suspended with modified termios"
+                    assert_restored(slave, original)
                     was_stopped = True
                     resume_at = time.monotonic() + suspend_for
                 elif child:
                     status = child_status
                     break
-            assert status is not None, ("hung", action, fault, output[-2000:])
+            session.output = output
+            assert status is not None, ("product timeout", action, fault, session.diagnostics())
             if action == "flood":
                 assert flood_bytes > 0, "paste scenario never injected any input"
             elif action is not None:
@@ -132,7 +129,7 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
                     break
                 output += chunk
             assert os.waitstatus_to_exitcode(status) == expected, (action, fault, status, output[-3000:])
-            assert termios.tcgetattr(slave) == original, (action, fault, "termios not restored")
+            assert_restored(slave, original)
             assert b"\x1b[6n" not in output, "cursor query can enable raw mode and consume keys"
             if no_color:
                 assert not has_foreground_color(output), "NO_COLOR must suppress scene colors"
@@ -153,11 +150,7 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
                 assert os.read(slave, 8192) == b"\n", "queued TUI input leaked to the shell"
             return output, time.monotonic() - start
         finally:
-            if status is None:
-                os.kill(pid, signal.SIGKILL)
-                os.waitpid(pid, 0)
-            os.close(master)
-            os.close(slave)
+            session.close()
 
     for no_color in (None, ""):
         out, _ = run(no_color=no_color)
@@ -184,6 +177,8 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
     assert .95 <= elapsed < 3, elapsed
     run(action="resize")
     run(action="giant")
+    for dimensions in [(24, 80), (40, 120), (12, 40), (10, 24), (9, 23)]:
+        run(dimensions=dimensions)
     out, _ = run(chinese=True)
     visible = re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]", b"", out)
     assert "小片草地".encode() in visible and "休息结束。".encode() in out, out
@@ -246,18 +241,19 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
                 time.sleep(.01)
             else:
                 raise AssertionError("did not suspend")
-            assert termios.tcgetattr(slave) == original
             os.tcsetpgrp(slave, os.getpgrp())
+            assert_restored(slave, original)
             os.kill(worker, signal.SIGCONT)
             time.sleep(.3)
-            assert termios.tcgetattr(slave) == original, "background resume reacquired terminal"
+            assert_restored(slave, original)
             os.tcsetpgrp(slave, worker)
             os.kill(worker, signal.SIGCONT)
             wait_mode(False)
             os.kill(worker, signal.SIGTERM)
             _, status = os.waitpid(worker, 0)
             assert os.waitstatus_to_exitcode(status) == -signal.SIGTERM, status
-            assert termios.tcgetattr(slave) == original
+            os.tcsetpgrp(slave, os.getpgrp())
+            assert_restored(slave, original)
         except BaseException:
             os.kill(worker, signal.SIGKILL)
             import traceback
@@ -276,7 +272,8 @@ with tempfile.TemporaryDirectory(prefix="afk-tui-") as temp:
                 status = child_status
                 break
         assert status is not None and os.waitstatus_to_exitcode(status) == 0, output
-        assert termios.tcgetattr(slave) == original
+        # The miniature shell already checked full termios before exiting;
+        # its session is now gone, so the slave may be ENOTTY on macOS.
     finally:
         if status is None:
             os.kill(controller, signal.SIGKILL)

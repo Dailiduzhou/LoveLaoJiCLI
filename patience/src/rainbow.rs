@@ -80,15 +80,21 @@ fn mix(from: [u8; 3], to: [u8; 3], t: f64) -> [u8; 3] {
 
 /// Build one frame of the bar line: filled cells as half-block marquee cells,
 /// empty cells plain, the readout and comfort message untouched by color.
-pub fn render_line(style: &Style, progress: f64, phase: f64, message: &str) -> String {
-    let filled = ((progress / 100.0) * BAR_WIDTH as f64).round() as usize;
-    let filled = filled.clamp(0, BAR_WIDTH);
+pub fn render_line(
+    style: &Style,
+    progress: f64,
+    phase: f64,
+    message: &str,
+    width: usize,
+) -> String {
+    let filled = ((progress / 100.0) * width as f64).round() as usize;
+    let filled = filled.clamp(0, width);
     let mut line = String::from("\r");
     match style.level {
         ColorLevel::None => line.push_str(&"█".repeat(filled)),
         level => {
             for cell in 0..filled {
-                let x = cell as f64;
+                let x = cell as f64 * BAR_WIDTH as f64 / width as f64;
                 level.push_fg(sample(x + 1.5 * style.k + phase), &mut line);
                 level.push_bg(sample(x + 0.5 * style.k + phase), &mut line);
                 line.push('▀');
@@ -98,8 +104,13 @@ pub fn render_line(style: &Style, progress: f64, phase: f64, message: &str) -> S
             }
         }
     }
-    line.push_str(&"░".repeat(BAR_WIDTH - filled));
-    line.push_str(&format!(" {:>5.1}% {message}\u{1b}[K", progress));
+    line.push_str(&"░".repeat(width - filled));
+    line.push_str(&format!(" {:>5.1}%", progress));
+    if !message.is_empty() {
+        line.push(' ');
+        line.push_str(message);
+    }
+    line.push_str("\u{1b}[K");
     line
 }
 
@@ -320,9 +331,13 @@ fn enable_vt() {
 #[cfg(test)]
 mod tests {
     use super::{
-        ansi16, ansi256, k_from_degrees, level_from, parse_angle, parse_level, render_line, sample,
-        ColorLevel, Style, MAX_K, PERIOD,
+        ansi16, ansi256, k_from_degrees, level_from, parse_angle, parse_level, sample, ColorLevel,
+        Style, MAX_K, PERIOD,
     };
+
+    fn render_line(style: &Style, progress: f64, phase: f64, message: &str) -> String {
+        super::render_line(style, progress, phase, message, crate::plan::BAR_WIDTH)
+    }
 
     fn style(level: ColorLevel, k: f64) -> Style {
         Style { level, k }
@@ -422,7 +437,7 @@ mod tests {
         assert!(line.contains("38;2;"));
         assert!(line.contains("48;2;"));
         assert!(line.contains("\u{1b}[0m"));
-        assert!(line.contains("100.0% "));
+        assert!(line.contains("100.0%\u{1b}[K"));
     }
 
     #[test]

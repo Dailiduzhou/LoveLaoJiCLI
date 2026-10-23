@@ -26,6 +26,29 @@ const CHINESE: [&str; 7] = [
     "再等等，快了快了",
 ];
 
+/// Conservative cell budgets for this finite deck only. Ambiguous em dash and
+/// ellipsis are budgeted as two cells; this is not a general Unicode width API.
+pub fn max_width(language: Language) -> usize {
+    let deck = match language {
+        Language::English => &ENGLISH,
+        Language::Chinese => &CHINESE,
+    };
+    deck.iter().map(|s| width(s)).max().unwrap_or(0)
+}
+fn width(text: &str) -> usize {
+    text.chars()
+        .map(|c| match c {
+            ' '..='~' => 1,
+            '—'
+            | '…'
+            | '\u{3000}'..='\u{303f}'
+            | '\u{4e00}'..='\u{9fff}'
+            | '\u{ff01}'..='\u{ff60}' => 2,
+            _ => panic!("unbudgeted comfort-deck character: {c:?}"),
+        })
+        .sum()
+}
+
 pub struct Comfort {
     deck: Vec<&'static str>,
     drawn: usize,
@@ -69,6 +92,12 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(seed);
         let comfort = Comfort::new(Language::English, &mut rng);
         (comfort, rng)
+    }
+
+    #[test]
+    fn builtin_width_budgets_are_pinned() {
+        assert_eq!(super::max_width(Language::English), 30);
+        assert_eq!(super::max_width(Language::Chinese), 26);
     }
 
     #[test]

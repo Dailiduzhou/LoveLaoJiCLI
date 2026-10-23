@@ -1,5 +1,7 @@
 # afk
 
+[简体中文](README-zh.md)
+
 A break without penalties, with a small Ratatui grass scene when a suitable
 foreground terminal is available.
 
@@ -157,5 +159,12 @@ stale cleanup or diagnostics, suspension past
 the deadline, dumb/small/redirected fallback and exact
 termios restoration. Tests also reject accidental cursor-position queries.
 
-Linux validated. macOS/WSL, native terminal-emulator visual checks and every I/O
-failure timing remain pending; no native Windows promise.
+Historical Linux validation is retained. The improvement-plan pass also ran the
+workspace suite and real controlling PTYs on macOS/Apple Silicon, including
+80×24, 120×40, 40×12, 24×10, 23×9 startup fallback and shrink/enlarge. A live
+session guardian keeps termios inspectable after the tool exits. Darwin's
+kernel-generated PENDIN is processed by an empty-queue nonblocking read before
+comparing every termios field; no differences are masked or settings overwritten.
+WSL, native Terminal/iTerm/Linux-emulator GUI screenshots, light/dark/font checks,
+long runs and exhaustive I/O failure timing remain pending. PTY byte/grid evidence
+is not pixel-level visual acceptance; no native Windows promise.

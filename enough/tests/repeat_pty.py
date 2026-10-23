@@ -4,19 +4,20 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from repeat_support import repeat_fixture, check_wrapper_contract
 
-binary = sys.argv[1]
+binary = str(Path(sys.argv[1]).resolve())
 with repeat_fixture(binary) as f:
     root, repo, env = f.root, f.repo, f.env
     run, start, finish = f.run, f.start, f.finish
     cmd = ["sh", "-c", "printf ran"]
     assert b"ran" in run(cmd)
-    for message in [b"It already passed.", b"Nothing changed.", b"enough.", b"no.", b"no."]:
+    for _ in range(5):
+        message = b"This invocation was skipped."
         out = run(cmd)
-        assert message in out and b"ran" not in out, out
+        assert message in out and b"enough --again <command> [args...]" in out and b"ran" not in out, out
     assert b"ran" in run(["--again", *cmd])
     (repo / "code").write_text("two\n")
     assert b"ran" in run(cmd)
-    assert b"already passed" in run(cmd)
+    assert b"This invocation was skipped." in run(cmd)
     # Same argv, external outcome changes: --again failure clears the old success.
     gate = root / "gate"
     gate.write_text("ok")
@@ -38,5 +39,5 @@ with repeat_fixture(binary) as f:
     assert finish(b, reply=b"go\n", trigger=b"OVERLAP_READY")[0] == 0
     assert b"ran" in run(cmd, reply=b"go\n", trigger=b"OVERLAP_READY")
     out = run(cmd)
-    assert b"already passed" in out and b"OVERLAP_READY" not in out, out
+    assert b"This invocation was skipped." in out and b"OVERLAP_READY" not in out, out
     check_wrapper_contract(f)

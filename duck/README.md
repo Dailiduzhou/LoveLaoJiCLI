@@ -1,5 +1,7 @@
 # duck
 
+[简体中文](README-zh.md)
+
 Explain a problem; no advice, AI, search or persistence.
 
 ```sh
@@ -36,5 +38,21 @@ I/O errors return 1, success returns 0. There are no hidden test hooks.
 Language follows the first nonempty `LC_ALL` → `LC_MESSAGES` → `LANG`;
 zh-CN/zh_CN/zh use Chinese, otherwise English. Linux/macOS/WSL Unix are the target
 platforms; this delivery was tested on Linux, including foreground PTYs.
+
+## Known long-input limitation
+
+Interactive input still uses the system canonical line buffer, whose **byte**
+capacity can be smaller than the application's character limit. Long pastes can
+lose bytes/newlines or wait indefinitely; macOS reproduces this with 600 Chinese
+characters in duck. This is **not fixed** by application length validation.
+For long answers use explicit `--expected / --actual / --last-change / --experiment` values (never secrets); a pipe is not
+an interactive answer. Ctrl+C cancels a stuck prompt. A safe shared input redesign
+needs separate lifecycle/dependency approval; afk's cbreak code is not reused here.
+
+The opt-in known-failing regression is
+`cargo test -p duck long_interactive_input_contract -- --ignored --nocapture`.
+It is ignored by the normal suite, not counted as passed. It covers canonical
+buffer and character limits with generated ASCII/CJK/mixed pastes and chunked input.
+See [ROADMAP.md](../ROADMAP.md).
 
 Tests: `cargo test -p duck` (Python 3 required for terminal tests).

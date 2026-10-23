@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bump the release version everywhere it is tracked: the single workspace
-# version, the installer default, README examples and the ROADMAP dev version.
+# version, the installer default, both README examples and the ROADMAP dev version.
 # Never commits or tags; review the diff and commit manually.
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -24,8 +24,8 @@ esc_old=${old//./\\.}
 esc_new=${new_bare//./\\.}
 
 # Workspace manifest (members inherit version.workspace), installer default
-# and README examples all use the same two textual shapes.
-for file in Cargo.toml install.sh README.md; do
+# and both language READMEs all use the same two textual shapes.
+for file in Cargo.toml install.sh README.md README-zh.md; do
     sed -i.bak "s/v$esc_old/$new/g; s/version = \"$esc_old\"/version = \"$esc_new\"/g" "$file"
     rm -- "$file.bak"
 done

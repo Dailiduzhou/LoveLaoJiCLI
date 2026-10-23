@@ -122,7 +122,15 @@ with tempfile.TemporaryDirectory(prefix="afk-owner-") as home:
                     status = child_status
                     break
             while select.select([master], [], [], 0)[0]:
-                output += os.read(master, 65536)
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError as error:
+                    if error.errno != errno.EIO:
+                        raise
+                    break
+                if not chunk:
+                    break
+                output += chunk
             assert status is not None and os.waitstatus_to_exitcode(status) == 0, output
             # ONLCR may map the marker's newline to CRLF again.
             normalized = output.replace(b"\r", b"")

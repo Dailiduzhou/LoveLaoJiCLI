@@ -59,6 +59,7 @@ fn run() -> Result<()> {
                 })
                 .map(String::as_str),
             l,
+            Source::Temporary,
         );
     }
     let store = Store::open()?;
@@ -89,15 +90,26 @@ fn run() -> Result<()> {
             if record.select() {
                 store.write(&path, &record)?;
             }
-            show(&mut out, record.selected(), l)?;
+            show(&mut out, record.selected(), l, Source::Persistent)?;
         }
     }
     Ok(())
 }
-fn show(out: &mut impl Write, task: Option<&str>, l: Language) -> Result<()> {
+enum Source {
+    Persistent,
+    Temporary,
+}
+fn show(out: &mut impl Write, task: Option<&str>, l: Language, source: Source) -> Result<()> {
     writeln!(
         out,
         "{}",
-        task.unwrap_or(l.text("Nothing to choose from.", "没有待选事项。"))
+        task.unwrap_or(match source {
+            Source::Persistent => l.text(
+                "Nothing to choose from. Use one add \"next small step\" to add a task.",
+                "没有待选事项。用 one add \"下一小步\" 添加一件事。",
+            ),
+            Source::Temporary =>
+                l.text("No selectable tasks in the input.", "输入中没有可选事项。"),
+        })
     )
 }

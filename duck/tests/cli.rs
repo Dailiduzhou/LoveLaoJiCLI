@@ -72,11 +72,8 @@ fn unavailable_and_invalid_answers() {
 }
 #[test]
 fn locale_precedence_and_non_utf8_cwd() {
-    use std::os::unix::ffi::OsStringExt;
     let f = Fixture::new(BIN, false);
-    let cwd = f
-        .root
-        .join(std::ffi::OsString::from_vec(b"cwd-\xff".to_vec()));
+    let cwd = f.root.join(filename_for_filesystem(&f.root, b"cwd-\xff"));
     fs::create_dir(&cwd).unwrap();
     for (all, messages, lang, chinese) in [
         ("en_US", "zh_CN", "zh_CN", false),
@@ -100,6 +97,20 @@ fn locale_precedence_and_non_utf8_cwd() {
         }));
     }
 }
+#[test]
+#[ignore = "known canonical-buffer overflow; shared terminal-input design approval required"]
+fn long_interactive_input_contract() {
+    let output = std::process::Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/long_input_pty.py"
+        ))
+        .arg(BIN)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", text(&output.stdout));
+}
+
 #[test]
 fn foreground_questions_and_cancellation() {
     let status = std::process::Command::new("python3")

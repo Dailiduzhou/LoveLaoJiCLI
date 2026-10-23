@@ -1,5 +1,7 @@
 # poke
 
+[English](README.md)
+
 ```sh
 poke add "小明"
 poke

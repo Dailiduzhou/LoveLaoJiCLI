@@ -123,6 +123,32 @@ impl Drop for Fixture {
         let _ = fs::remove_dir_all(&self.root);
     }
 }
+/// Probe the actual fixture filesystem, not the OS name. Only EILSEQ is an
+/// unsupported-name capability; permissions, space and all other I/O errors fail.
+/// Keep locale/control-character/business assertions running with a UTF-8 name.
+pub fn filename_for_filesystem(root: &Path, bytes: &[u8]) -> std::ffi::OsString {
+    use std::os::unix::ffi::OsStringExt;
+    let probe = root.join(std::ffi::OsString::from_vec(
+        b"filename-probe-\xff".to_vec(),
+    ));
+    let result = fs::create_dir(&probe).and_then(|()| {
+        let result = fs::write(
+            probe.join(std::ffi::OsString::from_vec(b"file-\xff".to_vec())),
+            b"probe",
+        );
+        fs::remove_dir_all(&probe).unwrap();
+        result
+    });
+    match result {
+        Ok(()) => std::ffi::OsString::from_vec(bytes.to_vec()),
+        Err(e) if e.raw_os_error() == Some(rustix::io::Errno::ILSEQ.raw_os_error()) => {
+            eprintln!("SKIP non-UTF-8 filename capability: fixture filesystem rejects names ({e}); other assertions still run");
+            String::from_utf8_lossy(bytes).into_owned().into()
+        }
+        Err(e) => panic!("non-UTF-8 filename fixture probe failed: {e}"),
+    }
+}
+
 pub fn text(b: &[u8]) -> String {
     String::from_utf8_lossy(b).into_owned()
 }

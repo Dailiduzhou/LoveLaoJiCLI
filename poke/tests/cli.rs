@@ -168,11 +168,8 @@ fn capacity_is_bounded_but_duplicate_add_still_succeeds() {
 }
 #[test]
 fn global_scope_locale_priority_and_non_utf8_state_path() {
-    use std::os::unix::ffi::OsStringExt;
     let f = Fixture::new(BIN, false);
-    let state = f
-        .root
-        .join(std::ffi::OsString::from_vec(b"state\xff".to_vec()));
+    let state = f.root.join(filename_for_filesystem(&f.root, b"state\xff"));
     let run = |args: &[&str]| {
         f.cmd()
             .env("XDG_STATE_HOME", &state)

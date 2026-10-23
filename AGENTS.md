@@ -42,7 +42,7 @@ tools (status):
    - poke fails closed on state errors; POKE_SEED is a hidden test hook.
    - third-batch targets remain Linux/macOS/WSL Unix; runtime is offline and local-only.
 
-behavior specs live in README.md (bilingual); per-tool deep dives live in the tool's own README.md (en-US) and README-zh.md (zh-CN). keep install.sh, README.md and workspace members in sync when adding or changing a tool.
+behavior specs live in root README.md (en-US) and README-zh.md (zh-CN); per-tool deep dives follow the same README.md/README-zh.md naming. Keep both languages equivalent and link to the matching language. keep install.sh, both root READMEs and workspace members in sync when adding or changing a tool.
 
 shell portability lessons (install.sh, macOS /bin/bash 3.2):
 - never write a bare `$VAR` immediately followed by a multibyte character (full-width ：（）；，？). Apple's bash 3.2 misparses the UTF-8 lead byte as part of the variable name; with `set -u` it spuriously aborts with `unbound variable` and the error message carries a raw 0xEF byte that crashes strict UTF-8 decoding of captured stderr in tests. always brace such expansions: `${VAR}：`.

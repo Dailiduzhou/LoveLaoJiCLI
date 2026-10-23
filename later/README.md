@@ -32,7 +32,15 @@ shown. No commit messages or command output are stored. Git failures degrade to
 a directory-only card. patience is not retrofitted with event logging.
 
 `resume` only displays the saved context; it never executes the next action or
-checks out a branch. It warns if the current branch/HEAD differs. No card is a
+checks out a branch. The next action is always first, followed by a rough elapsed
+age (just now / minutes / hours / elapsed days) and the saved snapshot. Future
+times or clock rollback say the saved time cannot be compared. Only the displayed
+`refs/heads/` prefix is simplified; detached HEAD and other references stay distinct.
+Full HEAD, file list/truncation and the latest failure remain visible. An empty
+diff says `No tracked-file differences`, not that the workspace is clean;
+untracked files still count, and unavailable diff data says `unknown`.
+It warns if the current branch/HEAD differs; unavailable current Git cannot
+establish a comparison. The card schema and stored timestamps are unchanged. No card is a
 friendly success (0); damaged/unrecognized records are errors (1), not partial
 cards. An explicit valid save can replace an old card atomically. The success
 message is printed only after the complete record is synced and replaced.
@@ -54,6 +62,22 @@ records. No telemetry or background collection.
 ```sh
 cargo test -p later
 ```
+
+## Known long-input limitation
+
+Interactive input still uses the system canonical line buffer, whose **byte**
+capacity can be smaller than the application's character limit. Long pastes can
+lose bytes/newlines or wait indefinitely; macOS reproduces this with 600 Chinese
+characters in duck. This is **not fixed** by application length validation.
+For long answers use explicit `--next` values (never secrets); a pipe is not
+an interactive answer. Ctrl+C cancels a stuck prompt. A safe shared input redesign
+needs separate lifecycle/dependency approval; afk's cbreak code is not reused here.
+
+The opt-in known-failing regression is
+`cargo test -p later long_interactive_input_contract -- --ignored --nocapture`.
+It is ignored by the normal suite, not counted as passed. It covers canonical
+buffer and character limits with generated ASCII/CJK/mixed pastes and chunked input.
+See [ROADMAP.md](../ROADMAP.md).
 
 Integration tests require Git; all fixtures isolate HOME/state. Terminal-independent
 operation works without DISPLAY, Wayland, clipboard or desktop services.

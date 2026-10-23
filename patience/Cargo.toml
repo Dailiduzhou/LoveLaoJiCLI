@@ -8,3 +8,4 @@ publish = false
 clap.workspace = true
 cli-common.workspace = true
 rand.workspace = true
+rustix.workspace = true
