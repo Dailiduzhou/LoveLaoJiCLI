@@ -46,8 +46,8 @@ fn no_links(path: &Path) -> Result<()> {
         p.push(c);
         if fs::symlink_metadata(&p)?.file_type().is_symlink() {
             return Err(error(
-                "Symlink in managed state path",
-                "状态路径中存在符号链接",
+                "Symlink in managed state path; check HOME/XDG_STATE_HOME for symlink components",
+                "状态路径中存在符号链接；请检查 HOME/XDG_STATE_HOME 是否包含符号链接",
             ));
         }
     }

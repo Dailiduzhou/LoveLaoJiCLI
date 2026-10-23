@@ -134,6 +134,23 @@ fn saved_schema_is_unchanged_and_context_changes_are_explicit() {
 }
 
 #[test]
+fn state_symlink_diagnostic_explains_home_and_xdg_without_following_it() {
+    let f = Fixture::new(BIN, false);
+    let alias = f.root.join("state-alias");
+    symlink(&f.state, &alias).unwrap();
+    let o = f
+        .cmd()
+        .env("XDG_STATE_HOME", alias)
+        .args(["--next", "private text"])
+        .output()
+        .unwrap();
+    code(&o, 1);
+    assert!(text(&o.stderr).contains("HOME/XDG_STATE_HOME"));
+    assert!(!text(&o.stderr).contains("private text"));
+    assert_eq!(fs::read_dir(&f.state).unwrap().count(), 0);
+}
+
+#[test]
 fn never_follows_state_symlinks() {
     let f = Fixture::new(BIN, false);
     code(&f.run(&["--next", "before"]), 0);
