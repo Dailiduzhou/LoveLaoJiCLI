@@ -32,7 +32,15 @@ shown. No commit messages or command output are stored. Git failures degrade to
 a directory-only card. patience is not retrofitted with event logging.
 
 `resume` only displays the saved context; it never executes the next action or
-checks out a branch. It warns if the current branch/HEAD differs. No card is a
+checks out a branch. The next action is always first, followed by a rough elapsed
+age (just now / minutes / hours / elapsed days) and the saved snapshot. Future
+times or clock rollback say the saved time cannot be compared. Only the displayed
+`refs/heads/` prefix is simplified; detached HEAD and other references stay distinct.
+Full HEAD, file list/truncation and the latest failure remain visible. An empty
+diff says `No tracked-file differences`, not that the workspace is clean;
+untracked files still count, and unavailable diff data says `unknown`.
+It warns if the current branch/HEAD differs; unavailable current Git cannot
+establish a comparison. The card schema and stored timestamps are unchanged. No card is a
 friendly success (0); damaged/unrecognized records are errors (1), not partial
 cards. An explicit valid save can replace an old card atomically. The success
 message is printed only after the complete record is synced and replaced.

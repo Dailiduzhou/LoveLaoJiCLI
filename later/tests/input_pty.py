@@ -26,7 +26,7 @@ with foreground_fixture(binary) as f:
             assert card.read_bytes() == before
             raise
         if valid:
-            assert f"Next: {text}\n".encode() in command("resume")
+            assert command("resume").startswith(f"Next: {text}\n\n".encode())
         else:
             assert card.read_bytes() == before
 
