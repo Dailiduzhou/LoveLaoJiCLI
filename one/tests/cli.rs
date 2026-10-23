@@ -36,7 +36,10 @@ fn cli_basics() {
 #[test]
 fn stable_selection_until_done_and_global_scope() {
     let f = Fixture::new(BIN, false);
-    assert!(text(&f.run(&[]).stdout).contains("Nothing to choose"));
+    assert_eq!(
+        text(&f.run(&[]).stdout),
+        "Nothing to choose from. Use one add \"next small step\" to add a task.\n"
+    );
     code(&f.run(&["add", "first"]), 0);
     code(&f.run(&["add", "second"]), 0);
     assert!(text(&f.run(&["done"]).stdout).contains("No selected"));
@@ -85,10 +88,14 @@ fn temporary_lists_are_isolated_even_with_broken_state() {
     for input in [b"".as_slice(), b"# heading\n- [x] done\n"] {
         let o = pipe(&f, &[], input);
         code(&o, 0);
-        assert!(text(&o.stdout).contains("Nothing to choose"));
+        assert_eq!(text(&o.stdout), "No selectable tasks in the input.\n");
     }
     fs::write(&path, "broken").unwrap();
     assert_eq!(text(&pipe(&f, &[], b"temporary\n").stdout), "temporary\n");
+    assert_eq!(
+        text(&pipe(&f, &[], b"# heading\n- [x] done\n").stdout),
+        "No selectable tasks in the input.\n"
+    );
     assert_eq!(fs::read_to_string(&path).unwrap(), "broken");
     fs::remove_file(&path).unwrap();
     // Piped done still operates on persisted selection, never the pipe.
@@ -115,6 +122,17 @@ fn piped_selection_is_repeatable_and_creates_no_state() {
         .unwrap();
     code(&o, 0);
     assert_eq!(text(&o.stdout), "file task\n");
+    let file = f.root.join("empty");
+    fs::write(&file, "").unwrap();
+    let o = f
+        .cmd()
+        .env("LC_ALL", "zh_CN")
+        .stdin(fs::File::open(file).unwrap())
+        .output()
+        .unwrap();
+    code(&o, 0);
+    assert_eq!(text(&o.stdout), "输入中没有可选事项。\n");
+    assert_eq!(fs::read_dir(&f.state).unwrap().count(), 0);
 }
 #[test]
 fn locks_corruption_and_unknown_schema_fail_closed() {
@@ -209,7 +227,10 @@ fn non_utf8_state_and_locale_priority() {
     assert_eq!(text(&o.stdout), "已添加。\n");
     assert_eq!(text(&run(&[]).stdout), "下一步\n");
     code(&run(&["done"]), 0);
-    assert_eq!(text(&run(&[]).stdout), "没有待选事项。\n");
+    assert_eq!(
+        text(&run(&[]).stdout),
+        "没有待选事项。用 one add \"下一小步\" 添加一件事。\n"
+    );
 }
 
 #[test]

@@ -22,7 +22,8 @@ before displaying just that task. Subsequent invocations keep that task regardle
 of RNG seed or cwd. `done` removes the selected task and clears its ID; the next
 bare invocation selects again. There is no completion history. With no selected
 task, `done` succeeds without choosing/completing anything. Empty lists succeed
-with `Nothing to choose from.` No priorities, projects, deadlines, tags or scores.
+with `Nothing to choose from. Use one add "next small step" to add a task.`
+No priorities, projects, deadlines, tags or scores.
 
 State: `${XDG_STATE_HOME:-$HOME/.local/state}/lovelaojicli/one/tasks.json`.
 The shared store provides mode 0700 directories, mode 0600 files, nonblocking OS
@@ -52,7 +53,8 @@ limits return 1; no partial choice is displayed. Filtering is deliberately small
 - Other text remains literal. No full Markdown parsing, setext/fence handling or inference.
 
 Exactly one remaining line is uniformly selected; duplicate lines remain separate
-candidates. Empty lists succeed. Temporary selection **never opens local state**,
+candidates. Empty/fully filtered input succeeds with `No selectable tasks in the input.`,
+not a suggestion to modify the persistent list. Temporary selection **never opens local state**,
 so it works even when persistent state is unavailable or corrupt and cannot
 change the persistent selection. Nothing is executed or fetched from the network.
 
