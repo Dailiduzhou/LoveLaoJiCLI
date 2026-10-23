@@ -46,13 +46,13 @@ bash install.sh                 # 菜单：发布版安装 / 卸载 / 本地编�
 bash install.sh install         # 下载脚本对应版本
 bash install.sh uninstall       # 直接进入卸载确认
 bash install.sh --help
-LOVELAOJI_VERSION=v0.5.0 bash install.sh install  # 指定版本
+LOVELAOJI_VERSION=v0.5.1 bash install.sh install  # 指定版本
 
 # 在源码 checkout 内，保留本地构建安装（需要 Rust/Cargo）
 ./install.sh install-local
 ```
 
-脚本当前默认 `v0.5.0`，不会静默追踪 latest。只有对应 Release 发布后才能下载；404 或网络失败会报错，不自动回退编译。需要固定脚本本身时，将 raw URL 的 `main` 换成对应标签（例如 `v0.5.0`）。
+脚本当前默认 `v0.5.1`，不会静默追踪 latest。只有对应 Release 发布后才能下载；404 或网络失败会报错，不自动回退编译。需要固定脚本本身时，将 raw URL 的 `main` 换成对应标签（例如 `v0.5.1`）。
 
 | 平台 | 发布目标 | 系统基线 |
 | --- | --- | --- |

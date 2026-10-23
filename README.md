@@ -46,13 +46,13 @@ bash install.sh                 # Menu: release install / uninstall / local buil
 bash install.sh install         # Download the script's release version
 bash install.sh uninstall       # Confirm uninstallation
 bash install.sh --help
-LOVELAOJI_VERSION=v0.5.0 bash install.sh install  # Pin a version
+LOVELAOJI_VERSION=v0.5.1 bash install.sh install  # Pin a version
 
 # Source checkout only; local build installation still requires Rust/Cargo:
 ./install.sh install-local
 ```
 
-The script defaults to `v0.5.0`, not a mutable latest release. Assets must be published first; missing releases/network failures are errors, never a silent source-build fallback. Replace `main` in the raw URL with a release tag to pin the script too.
+The script defaults to `v0.5.1`, not a mutable latest release. Assets must be published first; missing releases/network failures are errors, never a silent source-build fallback. Replace `main` in the raw URL with a release tag to pin the script too.
 
 | Platform | Release target | OS baseline |
 | --- | --- | --- |

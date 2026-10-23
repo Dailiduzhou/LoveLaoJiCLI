@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "afk"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "cli-common",
@@ -176,7 +176,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "cli-common"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "blake3",
  "clap",
@@ -362,7 +362,7 @@ dependencies = [
 
 [[package]]
 name = "duck"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "cli-common",
@@ -377,7 +377,7 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 
 [[package]]
 name = "enough"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "cli-common",
@@ -427,7 +427,7 @@ dependencies = [
 
 [[package]]
 name = "goodnight"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "cli-common",
  "rustix",
@@ -436,7 +436,7 @@ dependencies = [
 
 [[package]]
 name = "happiness"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "cli-common",
 ]
@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "joy"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "cli-common",
 ]
@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "later"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "cli-common",
@@ -635,7 +635,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "love"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "cli-common",
 ]
@@ -699,7 +699,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "one"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "cli-common",
@@ -767,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "patience"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "cli-common",
@@ -777,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "poke"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "cli-common",
@@ -828,7 +828,7 @@ dependencies = [
 
 [[package]]
 name = "proof"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "cli-common",
  "rustix",
@@ -1083,7 +1083,7 @@ checksum = "f9395f0f0eee849a9b707b2f06bb92a6a422090e2123bb2ef8e87a0e61892a8e"
 
 [[package]]
 name = "sprinkle"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "cli-common",
@@ -1128,7 +1128,7 @@ dependencies = [
 
 [[package]]
 name = "stuck"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "cli-common",
