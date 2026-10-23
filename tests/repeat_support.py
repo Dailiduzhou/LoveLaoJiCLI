@@ -1,9 +1,7 @@
 """Real foreground PTYs, not environment variables that bypass safety checks."""
-import errno
 import json
 import os
 from pathlib import Path
-import pty
 import select
 import signal
 import subprocess
@@ -12,18 +10,20 @@ import time
 
 from contextlib import contextmanager
 from types import SimpleNamespace
+from pty_support import PtySession
 
 @contextmanager
 def repeat_fixture(binary, default_trigger=None):
+    binary = str(Path(binary).resolve())
     tool = Path(binary).name
     with tempfile.TemporaryDirectory(prefix="humanutils-pty-") as temp:
-        root = Path(temp)
+        root = Path(temp).resolve()
         repo = root / "repo"
         repo.mkdir()
         state = root / "state"
         state.mkdir(mode=0o700)
         env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-        env.update(HOME=temp, XDG_STATE_HOME=str(state), XDG_CONFIG_HOME=str(root / "config"),
+        env.update(HOME=str(root), XDG_STATE_HOME=str(state), XDG_CONFIG_HOME=str(root / "config"),
                    PATH="/usr/bin:/bin", LC_ALL="C", GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")
         for k in ["BASH_ENV", "ENV"]:
             env.pop(k, None)
@@ -39,43 +39,29 @@ def repeat_fixture(binary, default_trigger=None):
         jobs = []
 
         def start(args):
-            pid, fd = pty.fork()
-            if pid == 0:
-                os.chdir(repo)
-                os.execve(binary, [binary, *args], env)
-            job = SimpleNamespace(pid=pid, fd=fd, output=b"", status=None, closed=False)
+            session = PtySession([binary, *args], env, repo)
+            job = SimpleNamespace(pid=session.worker, fd=session.master, session=session,
+                                  output=b"", status=None, closed=False)
             jobs.append(job)
             return job
 
         def read(job, delay=.05):
-            if not select.select([job.fd], [], [], delay)[0]:
-                return True
-            try:
-                data = os.read(job.fd, 65536)
-            except OSError as error:
-                if error.errno == errno.EIO:
-                    return False
-                raise
-            job.output += data
-            return bool(data)
+            job.session.read(delay)
+            job.output = job.session.output
+            return True
 
         def poll(job):
             if job.status is None:
-                child, status = os.waitpid(job.pid, os.WNOHANG)
+                child, status = job.session.poll()
                 if child:
+                    assert not os.WIFSTOPPED(status), job.session.diagnostics()
                     job.status = status
             return job.status
 
         def close(job):
             if job.closed:
                 return
-            if job.status is None:
-                try:
-                    os.killpg(job.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                _, job.status = os.waitpid(job.pid, 0)
-            os.close(job.fd)
+            job.session.close()
             job.closed = True
 
         def wait_for(job, trigger, timeout=15):
@@ -101,7 +87,7 @@ def repeat_fixture(binary, default_trigger=None):
                     if not open_pty:
                         time.sleep(.01)
                 else:
-                    raise AssertionError(f"hung {tool}: {job.output!r}")
+                    raise AssertionError(("product timeout", tool, job.session.diagnostics()))
                 assert reply is None, ("reply trigger was never observed", trigger, job.output)
                 return os.waitstatus_to_exitcode(job.status), job.output
             finally:

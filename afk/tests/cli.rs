@@ -74,11 +74,8 @@ fn real_tui_lifecycle_and_job_control() {
 
 #[test]
 fn non_utf8_cwd_and_english_locale_override() {
-    use std::os::unix::ffi::OsStringExt;
     let f = Fixture::new(BIN, false);
-    let cwd = f
-        .root
-        .join(std::ffi::OsString::from_vec(b"cwd-\xff".to_vec()));
+    let cwd = f.root.join(filename_for_filesystem(&f.root, b"cwd-\xff"));
     fs::create_dir(&cwd).unwrap();
     let o = f
         .cmd()

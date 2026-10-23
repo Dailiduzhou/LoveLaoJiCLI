@@ -75,12 +75,11 @@ fn exact_author_committer_date_and_head_reachability() {
 }
 #[test]
 fn non_merge_line_sum_path_dedup_binary_and_dirty_exclusion() {
-    use std::os::unix::ffi::OsStringExt;
     let f = Fixture::new(BIN, true);
     let now = state::now();
     fs::write(f.repo.join("code.rs"), "line1\nline2\n").unwrap();
     fs::write(f.repo.join("binary"), b"a\0b").unwrap();
-    let odd = std::ffi::OsString::from_vec(b"odd\xff\t\n\x1b".to_vec());
+    let odd = filename_for_filesystem(&f.root, b"odd\xff\t\n\x1b");
     fs::write(f.repo.join(&odd), "one\n").unwrap();
     commit(&f, ("Test", "test@localhost"), now, now);
     fs::write(f.repo.join("code.rs"), "line1\nline2\nline3\n").unwrap();
@@ -193,7 +192,7 @@ fn corrupt_unknown_locked_symlink_and_missing_identity_are_unknown_not_zero() {
 }
 #[test]
 fn working_directory_locale_and_filters_never_execute_repository_code() {
-    use std::os::unix::{ffi::OsStringExt, fs::PermissionsExt};
+    use std::os::unix::fs::PermissionsExt;
     let f = Fixture::new(BIN, true);
     let trap = f.repo.join("tripwire");
     fs::write(
@@ -243,9 +242,7 @@ fn working_directory_locale_and_filters_never_execute_repository_code() {
         assert!(marker.exists(), "tripwire was inert for {args:?}");
         fs::remove_file(&marker).unwrap();
     }
-    let sub = f
-        .repo
-        .join(std::ffi::OsString::from_vec(b"cwd\xff".to_vec()));
+    let sub = f.repo.join(filename_for_filesystem(&f.root, b"cwd\xff"));
     fs::create_dir(&sub).unwrap();
     let before = snapshot(&f.root);
     let o = f

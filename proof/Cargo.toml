@@ -9,4 +9,5 @@ publish = false
 cli-common = { workspace = true, features = ["local-time"] }
 
 [dev-dependencies]
+rustix.workspace = true
 serde_json.workspace = true

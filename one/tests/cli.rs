@@ -192,11 +192,8 @@ fn concurrent_adds_do_not_lose_successful_writes() {
 }
 #[test]
 fn non_utf8_state_and_locale_priority() {
-    use std::os::unix::ffi::OsStringExt;
     let f = Fixture::new(BIN, false);
-    let state = f
-        .root
-        .join(std::ffi::OsString::from_vec(b"state-\xff".to_vec()));
+    let state = f.root.join(filename_for_filesystem(&f.root, b"state-\xff"));
     let run = |args: &[&str]| {
         f.cmd()
             .env("XDG_STATE_HOME", &state)

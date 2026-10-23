@@ -2,25 +2,22 @@
 Usage: python3 tests/report_records_pty.py target/release
 Uses only isolated HOME/state/repositories and real foreground PTYs.
 """
-import errno
 import os
 from pathlib import Path
-import pty
-import select
-import signal
 import stat
 import subprocess
 import sys
 import tempfile
 import time
+from pty_support import PtySession
 
 bindir = Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="reports-pty-") as temp:
-    root = Path(temp)
+    root = Path(temp).resolve()
     repo = root / "repo"
     repo.mkdir()
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    env.update(HOME=temp, XDG_STATE_HOME=str(root / "state"), XDG_CONFIG_HOME=str(root / "config"),
+    env.update(HOME=str(root), XDG_STATE_HOME=str(root / "state"), XDG_CONFIG_HOME=str(root / "config"),
                PATH="/usr/bin:/bin", LC_ALL="C", TZ="UTC",
                GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")
     def git(*args):
@@ -33,47 +30,20 @@ with tempfile.TemporaryDirectory(prefix="reports-pty-") as temp:
     git("commit", "-qm", "initial")
 
     def wrapper(tool, args, expected, reply=None):
-        pid, fd = pty.fork()
-        if pid == 0:
-            os.chdir(repo)
-            os.execve(bindir / tool, [tool, *args], env)
-        output = b""
-        status = None
-        deadline = time.monotonic() + 15
-        try:
+        with PtySession([str(bindir / tool), *args], env, repo) as session:
+            deadline = time.monotonic() + 15
             while time.monotonic() < deadline:
-                if select.select([fd], [], [], .02)[0]:
-                    try:
-                        output += os.read(fd, 65536)
-                    except OSError as e:
-                        if e.errno != errno.EIO:
-                            raise
-                if reply is not None and b"What are you changing?" in output:
-                    os.write(fd, reply)
+                session.read(.02)
+                if reply is not None and b"What are you changing?" in session.output:
+                    os.write(session.master, reply)
                     reply = None
-                child, child_status = os.waitpid(pid, os.WNOHANG)
-                if child:
-                    status = child_status
+                if session.poll()[0]:
                     break
-            assert status is not None, ("hung", tool, output)
-            while select.select([fd], [], [], 0)[0]:
-                try:
-                    chunk = os.read(fd, 65536)
-                except OSError as error:
-                    if error.errno != errno.EIO:
-                        raise
-                    break
-                if not chunk:
-                    break
-                output += chunk
-            assert reply is None, ("hypothesis prompt never observed", tool, output)
-            assert os.waitstatus_to_exitcode(status) == expected, (tool, output, status)
-            return output
-        finally:
-            if status is None:
-                os.killpg(pid, signal.SIGKILL)
-                os.waitpid(pid, 0)
-            os.close(fd)
+            assert session.status is not None, ("product timeout", tool, session.diagnostics())
+            session.drain()
+            assert reply is None, ("hypothesis prompt never observed", tool, session.output)
+            assert os.waitstatus_to_exitcode(session.status) == expected, (tool, session.output, session.status)
+            return session.output
 
     def snapshot():
         state = root / "state"

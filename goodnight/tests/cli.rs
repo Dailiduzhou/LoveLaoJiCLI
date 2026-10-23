@@ -32,12 +32,11 @@ fn non_git_is_readonly_even_without_home_or_time_zone() {
 }
 #[test]
 fn git_summary_does_not_update_index_or_invoke_later() {
-    use std::os::unix::ffi::OsStringExt;
     let f = Fixture::new(BIN, true);
     fs::write(f.repo.join("code.rs"), "changed\n").unwrap();
     fs::write(
         f.repo
-            .join(std::ffi::OsString::from_vec(b"\xff\n\x1b.txt".to_vec())),
+            .join(filename_for_filesystem(&f.root, b"\xff\n\x1b.txt")),
         "new",
     )
     .unwrap();
@@ -95,11 +94,8 @@ fn worktrees_detached_and_unborn_are_safe() {
 }
 #[test]
 fn locale_priority_and_non_utf8_cwd() {
-    use std::os::unix::ffi::OsStringExt;
     let f = Fixture::new(BIN, false);
-    let path = f
-        .root
-        .join(std::ffi::OsString::from_vec(b"cwd\xff".to_vec()));
+    let path = f.root.join(filename_for_filesystem(&f.root, b"cwd\xff"));
     fs::create_dir(&path).unwrap();
     let o = f
         .cmd()

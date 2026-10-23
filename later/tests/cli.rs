@@ -81,9 +81,8 @@ fn workspace_and_worktree_separation() {
 }
 #[test]
 fn non_utf8_and_control_paths() {
-    use std::os::unix::ffi::OsStringExt;
     let f = Fixture::new(BIN, true);
-    let weird = std::ffi::OsString::from_vec(b"x\xff\x1b\n.rs".to_vec());
+    let weird = filename_for_filesystem(&f.root, b"x\xff\x1b\n.rs");
     fs::write(f.repo.join(weird), "x").unwrap();
     code(&f.run(&["--next", "test paths"]), 0);
     let o = f.run(&["resume"]);

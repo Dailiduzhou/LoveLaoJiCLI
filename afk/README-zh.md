@@ -121,5 +121,9 @@ cargo test -p afk 包含 TestBackend 场景测试与 Python 真实前台 PTY：�
 挂起超过期限、dumb/小终端/重定向降级，
 并逐项比较完整 termios 恢复。测试还拒绝意外的光标位置查询。
 
-本轮只在 Linux 验证。macOS/WSL、真实终端模拟器目视检查和全部 I/O 故障时序仍待补；
-不承诺原生 Windows。
+保留历史 Linux 验证。本次修复方案实施在 macOS/Apple Silicon 运行了 workspace 套件和真实控制 PTY，
+补验 80×24、120×40、40×12、24×10、23×9 启动降级及缩小/放大。
+会话守卫在工具退出后仍存活，使 termios 可检查；Darwin 恢复 canonical 时由内核产生的 PENDIN
+先通过空队列非阻塞读取处理，再逐字段比较完整 termios，不屏蔽差异、不覆盖设置。
+WSL、Terminal/iTerm/Linux 模拟器 GUI 截图、深浅主题/字体、长时间运行与全部 I/O 故障时序仍待补；
+PTY 字节/网格证据不等于像素级目视验收，不承诺原生 Windows。

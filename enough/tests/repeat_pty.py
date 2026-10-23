@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tests"))
 from repeat_support import repeat_fixture, check_wrapper_contract
 
-binary = sys.argv[1]
+binary = str(Path(sys.argv[1]).resolve())
 with repeat_fixture(binary) as f:
     root, repo, env = f.root, f.repo, f.env
     run, start, finish = f.run, f.start, f.finish
