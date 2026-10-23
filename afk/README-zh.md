@@ -1,5 +1,7 @@
 # afk
 
+[English](README.md)
+
 不带惩罚的休息；有合适前台终端时，显示一小片 Ratatui 草地。
 
 ```sh

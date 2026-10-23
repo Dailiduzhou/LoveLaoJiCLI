@@ -1,5 +1,7 @@
 # duck
 
+[English](README.md)
+
 把问题说清楚；不提供建议、不调用 AI 或搜索、不持久化。
 
 ```sh

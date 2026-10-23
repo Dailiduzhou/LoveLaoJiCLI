@@ -1,5 +1,7 @@
 # poke
 
+[简体中文](README-zh.md)
+
 ```sh
 poke add "Alex"
 poke

@@ -10,7 +10,7 @@ patience sleep 5
 patience patience sleep 3   # 多一层耐心，多一条进度条
 ```
 
-顶层 [`README.md`](../README.md) 记录使用方式；本文件写给好奇的人：每个小巧思背后的决策与实现。
+顶层 [`README-zh.md`](../README-zh.md) 记录使用方式；本文件写给好奇的人：每个小巧思背后的决策与实现。
 
 ## 子命令，而不是选项
 

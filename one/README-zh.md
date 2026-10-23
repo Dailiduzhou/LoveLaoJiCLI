@@ -1,5 +1,7 @@
 # one
 
+[English](README.md)
+
 只展示一个下一步，不做项目管理。
 
 ```sh

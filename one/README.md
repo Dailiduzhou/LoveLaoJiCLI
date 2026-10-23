@@ -1,5 +1,7 @@
 # one
 
+[简体中文](README-zh.md)
+
 One next task, not a project manager.
 
 ```sh

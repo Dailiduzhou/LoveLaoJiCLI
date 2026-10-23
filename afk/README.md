@@ -1,5 +1,7 @@
 # afk
 
+[简体中文](README-zh.md)
+
 A break without penalties, with a small Ratatui grass scene when a suitable
 foreground terminal is available.
 

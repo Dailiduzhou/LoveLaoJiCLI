@@ -1,5 +1,7 @@
 # goodnight
 
+[English](README.md)
+
 ```sh
 goodnight
 ```

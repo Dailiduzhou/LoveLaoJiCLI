@@ -1,5 +1,7 @@
 # proof
 
+[English](README.md)
+
 ```sh
 proof
 ```

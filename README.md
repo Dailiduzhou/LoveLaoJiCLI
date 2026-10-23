@@ -1,13 +1,13 @@
 # LoveLaoJiCLI
 
-爱你老己命令行工具。Love you, dear myself CLI tools, powered by Rust and clap.
+[简体中文](README-zh.md)
 
-实施进度、当前限制、待补验收和后续批次见 [ROADMAP.md](ROADMAP.md)。本 README 描述当前已实现接口，路线图中的未来接口尚不可用。
+Love you, dear myself CLI tools, powered by Rust and clap.
+
 See [ROADMAP.md](ROADMAP.md) for implementation status, limitations, outstanding validation and upcoming batches. This README documents implemented interfaces; planned interfaces are not yet available.
 
-## 构建与运行 / Build and run
+## Build and run
 
-需要 Rust 1.89+ 和 Cargo。三批工具支持 Linux、macOS、WSL Linux 用户空间；Git 功能需要本机 Git。
 Requires Rust 1.89+ and Cargo. All three batches target Linux, macOS and WSL Linux; Git features require local Git.
 
 ```sh
@@ -18,263 +18,220 @@ cargo build --workspace --release
 ./target/release/joy
 ./target/release/patience sleep 3
 
-# 或者 / Or:
+# Or:
 cargo run -p love -- --help
 cargo run -p happiness -- --version
 cargo run -p joy
 cargo run -p patience -- sh -c 'echo hi'
 ```
 
-十四个工具各有独立目录：`love/`、`happiness/`、`joy/`、`patience/`、`sprinkle/`、`later/`、`enough/`、`stuck/`、`duck/`、`one/`、`afk/`、`goodnight/`、`proof/`、`poke/`，共用 `cli-common/`。
-Each tool is independently usable; `cli-common/` shares CLI, locale, private state, Git snapshots and execution plumbing.
+All fourteen tools have independent directories: `love/`, `happiness/`, `joy/`, `patience/`, `sprinkle/`, `later/`, `enough/`, `stuck/`, `duck/`, `one/`, `afk/`, `goodnight/`, `proof/` and `poke/`. Each is independently usable; `cli-common/` shares CLI, locale, private state, Git snapshots and execution plumbing.
 
-## 交互式安装与卸载 / Interactive installation
+## Interactive installation and uninstallation
 
-Linux / macOS / WSL 下使用 Bash，无需 sudo 或 Rust。需要 `curl`、`tar`、`sha256sum`（Linux）或 `shasum`（macOS）和常用 Unix 工具。
-Run with Bash on Linux/macOS/WSL, without sudo or Rust. Requires curl, tar, a SHA-256 utility and standard Unix tools.
+Run with Bash on Linux/macOS/WSL, without sudo or Rust. Requires `curl`, `tar`, `sha256sum` (Linux) or `shasum` (macOS), and standard Unix tools.
 
-从 `raw.githubusercontent.com` 下载脚本，检查后执行；二进制来自 GitHub Releases，而不是 raw 源码目录。不要直接 `curl | bash`：交互确认需要保留标准输入。
 Download the script from raw.githubusercontent.com, inspect it, then execute it. Binaries come from GitHub Releases, not the raw source tree. Do not pipe into Bash: confirmation needs stdin.
 
 ```sh
 curl --fail --show-error --location --proto '=https' --proto-redir '=https' \
   https://raw.githubusercontent.com/Dailiduzhou/LoveLaoJiCLI/main/install.sh \
   --output install.sh
-# 检查脚本后 / After inspecting the script:
+# After inspecting the script:
 bash install.sh install
 ```
 
 ```sh
-bash install.sh                 # 菜单：发布版安装 / 卸载 / 本地编译 / 退出
-bash install.sh install         # 下载脚本对应版本 / Download the script's release version
-bash install.sh uninstall       # 直接进入卸载确认 / Confirm uninstallation
+bash install.sh                 # Menu: release install / uninstall / local build / exit
+bash install.sh install         # Download the script's release version
+bash install.sh uninstall       # Confirm uninstallation
 bash install.sh --help
-LOVELAOJI_VERSION=v0.5.0 bash install.sh install  # 指定版本 / Pin a version
+LOVELAOJI_VERSION=v0.5.0 bash install.sh install  # Pin a version
 
-# 在源码 checkout 内，保留本地构建安装（需要 Rust/Cargo）
 # Source checkout only; local build installation still requires Rust/Cargo:
 ./install.sh install-local
 ```
 
-脚本当前默认 `v0.5.0`，不会静默追踪 latest。只有对应 Release 发布后才能下载；404 或网络失败会报错，不自动回退编译。需要固定脚本本身时，将 raw URL 的 `main` 换成对应标签（例如 `v0.5.0`）。
 The script defaults to `v0.5.0`, not a mutable latest release. Assets must be published first; missing releases/network failures are errors, never a silent source-build fallback. Replace `main` in the raw URL with a release tag to pin the script too.
 
-| 平台 / Platform | Release target | 系统基线 / OS baseline |
+| Platform | Release target | OS baseline |
 | --- | --- | --- |
 | Linux / WSL x86_64 | `x86_64-unknown-linux-gnu` | glibc 2.35+ (Ubuntu 22.04+) |
 | Linux / WSL ARM64 | `aarch64-unknown-linux-gnu` | glibc 2.39+ (Ubuntu 24.04+) |
 | macOS Intel | `x86_64-apple-darwin` | macOS 13+ |
 | macOS Apple Silicon | `aarch64-apple-darwin` | macOS 13+ |
 
-基于 `uname` 自动选择平台；Linux 包不是 musl 静态包，不支持 Alpine/musl 或 Windows 原生终端。旧系统可尝试源码构建；Git 功能仍需要本机 Git，日期功能需要系统时区数据。macOS 包未经 Apple 签名或公证。
 Platform selection uses uname. Linux packages use glibc, not static musl; Alpine/musl and native Windows are unsupported. Try source builds on older systems. Git features still require local Git; local dates require system timezone data. macOS binaries are not Apple-signed or notarized.
 
-- 安装前需输入 `y` 确认；空输入或 EOF 取消，不下载、不更改配置。
-- 下载十四个工具的对应平台压缩包和 SHA-256 文件，校验摘要、成员列表及版本可执行性后才更新安装。校验失败保留原安装；SHA-256 用于完整性校验，不是独立签名，仍需信任仓库和 HTTPS。
-- 安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`。`install-local` 使用锁定依赖构建本机 release，产物位于 `target/installer/<target>/release/`。
-- 按 `$SHELL` 自动配置 PATH：Bash 使用 `.bashrc` 和生效的登录配置文件；Zsh 使用 `${ZDOTDIR:-$HOME}` 中的 `.zshrc`、`.zprofile`；Fish 使用 `${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/lovelaojicli.fish`。
-- PATH 配置带有项目专属标记，重复安装不会重复添加。安装目录优先于原有 PATH，其他位置的同名程序不会被覆盖。
-- 卸载不需要 Rust 或联网，按安装记录移除十四个工具及本项目 PATH 配置，保留其他配置、文件、用户状态和源码构建产物。
-- 脚本提示按 locale 切换中英文。若设置了自定义 XDG 目录，卸载时请保持相同的 `XDG_DATA_HOME`。
+- Enter `y` to confirm installation; an empty answer or EOF cancels without downloads or configuration changes.
+- The platform archive contains all fourteen tools. Its SHA-256, exact member list and executable versions are checked before updating; verification failures preserve the existing installation. Checksums provide integrity, not independent signatures; trust in the repository and HTTPS is still required.
+- Install into `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`. `install-local` uses locked dependencies for a native release build in `target/installer/<target>/release/`.
+- PATH setup follows `$SHELL`: Bash uses `.bashrc` and the effective login profile; Zsh uses `.zshrc` and `.zprofile` under `${ZDOTDIR:-$HOME}`; Fish uses `${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/lovelaojicli.fish`.
+- Project-marked PATH blocks make reinstallation idempotent. The installation directory takes precedence over the existing PATH; same-named programs elsewhere are not overwritten.
+- Offline uninstallation needs no Rust. It removes only the fourteen managed binaries and project PATH blocks, preserving other configuration, files, user state and source-build artifacts.
+- Installer prompts follow the locale. Keep the same custom `XDG_DATA_HOME` when uninstalling.
 
-Installation requires confirmation, verifies the archive's SHA-256, exact member list and executable versions before updating the installation, and registers the user-local directory in Bash/Zsh/Fish. Verification failures preserve an existing installation. Checksums provide integrity, not independent signatures; trust in the repository and HTTPS is still required. Reinstallation is idempotent. Source installation uses locked dependencies and `target/installer/<target>/release/`. Offline uninstallation removes only managed binaries and PATH blocks, preserving state and unrelated files. Keep the same `XDG_DATA_HOME` when uninstalling.
-
-**安装后打开新终端即可使用命令**，或执行脚本最后打印的 PATH 命令，立即在当前终端生效。脚本不能直接修改父终端环境，请勿 `source install.sh`。卸载后也请打开新终端刷新 PATH 和命令缓存。
 Open a new terminal after installation/uninstallation. To use the tools immediately, run the PATH command printed by the installer. Execute the installer; do not source it.
 
-## 发布 / Releases
+## Releases
 
-[Release workflow](.github/workflows/release.yml) 在推送稳定版标签 `vX.Y.Z` 时触发，也可通过 Actions 手动指定一个已存在的标签。先在 Linux 上执行完整本地验证，再用四个平台的原生 runner 构建、检查中英文 `--help`/`--version`、打包。每个平台上传一个包含全部十四个工具的 `.tar.gz` 及对应 `.sha256`。所有平台成功后才创建/补全 draft 并正式发布；重跑不会覆盖已公开的版本。
-The workflow runs on stable version tags or manual dispatch with an existing tag. Full Linux validation precedes four native builds and bilingual help/version smoke tests. Each platform provides one archive containing all fourteen tools plus a SHA-256 file. A draft is published only after all builds succeed; published releases cannot be overwritten by a rerun.
+The [release workflow](.github/workflows/release.yml) runs on stable version tags or manual dispatch with an existing tag. Full Linux validation precedes four native builds and bilingual help/version smoke tests. Each platform provides one archive containing all fourteen tools plus a SHA-256 file. A draft is published only after all builds succeed; published releases cannot be overwritten by a rerun.
 
-发布前运行 `bash scripts/bump-version.sh vX.Y.Z`，它会同步 workspace 版本、`Cargo.lock`、`install.sh` 默认版本、本文版本示例和 ROADMAP 开发版本，并拒绝残留旧版本或未继承 workspace 版本的 crate；审阅 diff 后提交并打标签。打包脚本会拒绝标签/工作区/安装器版本不一致，或安装器工具列表遗漏二进制的情况。仓库需启用 Actions 并允许发布 job 使用 `contents: write`（其余 job 只读）。
-Before tagging, run `bash scripts/bump-version.sh vX.Y.Z`; it synchronizes the workspace version, lockfile, installer default, README examples and the ROADMAP dev version, and rejects stale references or crates not inheriting the workspace version. Review the diff, commit, then tag. Packaging rejects version mismatches and installer/workspace tool-list drift. Enable Actions and permit the publish job's `contents: write`; other jobs are read-only.
+Before tagging, run `bash scripts/bump-version.sh vX.Y.Z`; it synchronizes the workspace version, lockfile, installer default, examples in both `README.md` and `README-zh.md`, and the ROADMAP dev version, and rejects stale references or crates not inheriting the workspace version. Review the diff, commit, then tag. Packaging rejects version mismatches and installer/workspace tool-list drift. Enable Actions and permit the publish job's `contents: write`; other jobs are read-only.
 
 ```sh
-# 确保版本尚未发布 / Use a version that has not already been published:
+# Use a version that has not already been published:
 git tag vX.Y.Z
 git push origin vX.Y.Z
 
-# 可选：本机复现打包，不创建 GitHub Release
 # Optional native packaging; does not publish anything:
 bash scripts/package-release.sh vX.Y.Z "$(rustc -vV | awk '/^host: / { print $2 }')"
-# 输出 / Output: dist/lovelaojicli-vX.Y.Z-<target>.tar.gz[.sha256]
+# Output: dist/lovelaojicli-vX.Y.Z-<target>.tar.gz[.sha256]
 ```
 
-## 最小功能 / Features
+## Features
 
-- `love/happiness/joy` 直接运行：输出一句中英文祝福。These three tools print a localized blessing with no arguments.
-- `--help` / `-h`：显示帮助。Show help.
-- `--version` / `-V`：显示版本。Show version.
-- `--verison`：兼容最初说明中的拼写。Accepted as a compatibility alias.
+- `love/happiness/joy` print a localized blessing with no arguments.
+- `--help` / `-h`: show help.
+- `--version` / `-V`: show version.
+- `--verison`: accepted as a compatibility alias.
 
-love、happiness、joy 不提供子命令或其他参数。No subcommands or additional arguments for love, happiness or joy.
+No subcommands or additional arguments for love, happiness or joy.
 
-### patience：假进度条包装器 / Fake progress bar wrapper
+### patience: Fake progress bar wrapper
 
-`patience <command> [args...]` 像工具那样运行一个真实命令，并给它演出一条假进度条：
 `patience <command> [args...]` runs a real command and performs a fake progress bar show around it:
 
-- 每次运行随机选择一种速度曲线（匀速、先慢后快、先快后慢、S 型、阶梯式、指数逼近、平方根）。
-  Each run picks one random speed curve (linear, ease-in, ease-out, sigmoid, stepped, exponential, square-root).
-- 多次爬升与短卡，随后停在 97%~99.9%；只要子命令还没退出，进度条就永不再动。
-  Multiple climbs and short stalls, then a hold at 97–99.9%; the bar never moves again until the child exits.
-- 子命令成功退出时快速填满到 100%；失败则停在原地，绝不填满。
-  On success the bar rapidly fills to 100%; on failure it stays parked and never fills.
-- 卡住时展示中英文安慰语（洗牌抽取，绝不连续重复），结果行带真实耗时与退出码。
-  Localized comfort messages while stalled (shuffled, never repeated back-to-back); the result line carries the real elapsed time and exit code.
-- 退出码透传子命令（信号终止则 128+N）；Ctrl+C 同组直达，无孤儿进程。
-  Exit codes pass through from the child (128+N on signals); Ctrl+C reaches the child via the shared process group.
-- 子进程输出被捕获（每流上限 1MiB），进度条结束后回放。
-  Child output is captured (1 MiB per stream) and replayed after the bar.
-- 进度条是彩虹跑马灯：调色板是 13 个锚点组成的无缝循环渐变，色带界线默认斜 45°，每帧滑动一格；填充段为动画彩虹，空段仍是灰色 `░`。
-  The bar is a rainbow marquee: a seamless looping palette of 13 anchors, band boundaries slanted 45° by default, sliding one cell per frame; the filled part is the animated rainbow, the empty part stays gray `░`.
-- 按终端能力自动降级：真彩 → 256 色 → 16 色 → 无色原样；尊重 `NO_COLOR` 与 `TERM=dumb`，非 TTY 照旧不渲染。
-  Colors degrade with the terminal's capability: truecolor → 256 → 16 → plain; `NO_COLOR` and `TERM=dumb` are honored, and non-TTY runs still render nothing.
-- 特判：前缀每多写一个 `patience` 记号，就同时多显示一条独立演出的进度条，真实命令仍是它们之后的那个（`patience patience sleep 3` 同时显示两条）。
-  Special case: each extra leading `patience` token adds one more independently performing bar to the show; the real command is whatever follows them (`patience patience sleep 3` shows two bars at once).
-- 非 TTY 环境不渲染动画，只输出回放与结果行。
-  Not a TTY: no animation, just the replay and result line.
+- Each run picks one random speed curve (linear, ease-in, ease-out, sigmoid, stepped, exponential, square-root).
+- Multiple climbs and short stalls, then a hold at 97–99.9%; the bar never moves again until the child exits.
+- On success the bar rapidly fills to 100%; on failure it stays parked and never fills.
+- Localized comfort messages while stalled (shuffled, never repeated back-to-back); the result line carries the real elapsed time and exit code.
+- Exit codes pass through from the child (128+N on signals); Ctrl+C reaches the child via the shared process group.
+- Child output is captured (1 MiB per stream) and replayed after the bar.
+- The bar is a rainbow marquee: a seamless looping palette of 13 anchors, band boundaries slanted 45° by default, sliding one cell per frame; the filled part is the animated rainbow, the empty part stays gray `░`.
+- Colors degrade with the terminal's capability: truecolor → 256 → 16 → plain; `NO_COLOR` and `TERM=dumb` are honored, and non-TTY runs still render nothing.
+- Special case: each extra leading `patience` token adds one more independently performing bar to the show; the real command is whatever follows them (`patience patience sleep 3` shows two bars at once).
+- Stderr-sized animation reserves a column/row, omits messages before shortening bars, and falls back when geometry/capabilities are unsafe. Any observed resize permanently stops redraw for this invocation; the child still runs once. `NO_COLOR` disables color only.
+- Non-TTY and conservative fallbacks emit no animation controls, just replay and the result line.
 
 ```sh
-patience make -j4        # 假装在认真编译
-patience sleep 5        # 看看它卡在 98% 时的表情
-patience -- git status  # 子命令带 -- 开头的参数时用 -- 分隔
-patience patience sleep 5  # 套两层，同时看两条进度条 / nest it to watch two bars at once
+patience make -j4        # Pretend to compile very seriously
+patience sleep 5        # Watch it stall near 98%
+patience -- git status  # Use -- to separate wrapper and child arguments
+patience patience sleep 5  # nest it to watch two bars at once
 ```
 
-实现细节与设计巧思见 [`patience/README-zh.md`](patience/README-zh.md)。
 Implementation notes and design decisions: [`patience/README.md`](patience/README.md).
 
-隐藏测试钩子（不写入 `--help`）：`PATIENCE_SEED=<u64>` 固定随机，`PATIENCE_FAST=1` 将所有时间缩至 1%。
 Hidden test hooks (not in `--help`): `PATIENCE_SEED=<u64>` fixes randomness; `PATIENCE_FAST=1` scales every timing to 1%.
 
-## 首批工具 / First batch
+## First batch
 
-首批 MVP 已实现，不包含原始构想中的全部未来参数；实现状态与后续验收见 [路线图](ROADMAP.md)。本地 `project.md` 保留详细设计，但当前不随仓库分发。
 The first-batch MVP is implemented, not every option in the original ideas; see the [roadmap](ROADMAP.md) for status and follow-up validation. The local `project.md` retains the detailed design but is not currently distributed with the repository.
 
 ```sh
-sprinkle                       # HEAD 的隔离副本 / isolated HEAD copy
-sprinkle worktree              # 同上 / same as the default
-sprinkle diff                  # 创建时的插入补丁 / original insertion patch
-sprinkle undo                  # 验证无额外工作才撤销 / verified undo only
-later --next "check token expiry"  # headless 保存 / save
-later                          # 交互只问一个问题 / one interactive question
-later resume                   # 显示，不执行 / display, never execute
-enough cargo test             # 最近真实成功后 5 分钟内提醒 / recent-success reminder
-enough --again cargo test     # 始终执行 / always execute
-stuck cargo test               # 三次相同失败后要求假设 / hypothesis after three equal failures
+sprinkle                       # isolated HEAD copy
+sprinkle worktree              # same as the default
+sprinkle diff                  # original insertion patch
+sprinkle undo                  # verified undo only
+later --next "check token expiry"  # save
+later                          # one interactive question
+later resume                   # display, never execute
+enough cargo test             # recent-success reminder
+enough --again cargo test     # always execute
+stuck cargo test               # hypothesis after three equal failures
 stuck --hypothesis "increase timeout" cargo test
 ```
 
-- **sprinkle**：源 checkout 必须干净；仅在旁边新建的受管理 worktree 中插入注释。支持 Markdown、Go、Rust、C/C++，仅考虑可确认安全的文件末尾；固定 25% 文件概率，每文件一条，最多 100 条，零条也成功。原 checkout 文件与分支不变，Git common dir 会新增登记。副本是 HEAD，不是完整备份；不保证任意仓库都能编译，不执行脚本验证。
-  Requires a clean source; adds conservative EOF comments only in its new worktree. Fixed 25% selection, one per file, 100 total; zero additions is valid. The original checkout stays unchanged, but shared Git metadata gains a branch/worktree. This is a HEAD copy, not a backup or compilation guarantee.
-- **later**：每个 worktree 一张最新卡片；非 Git 按当前目录保存。`--next` 为非空单行，最多 2,000 字符。没有交互终端也没有 `--next`，立即返回 125，不读取管道、不覆盖旧卡片。
-  One latest card per worktree (per cwd without Git). `--next` is a nonempty single line, at most 2,000 characters. Without a foreground terminal or explicit answer it returns 125, without consuming pipes or replacing the old card.
-- **enough**：同 cwd/argv、稳定代码快照、最近真实成功完成后 5 分钟内才可能跳过，提示写 stderr，stdout 留空。`--again` 总是执行，失败会清除旧成功资格；跳过不刷新窗口。不是构建缓存，不能证明外部服务、忽略文件或 stdin 没变。
-  Can skip only a matching invocation with a stable snapshot within five minutes of real success. Notices use stderr; skips have empty stdout and do not extend the window. `--again` always runs and invalidates old success on failure. This is not a build cache or proof about external state.
-- **stuck**：连续三次相同 invocation/代码/退出码/两流原始字节失败后，第四次要求假设。假设为非空单行、最多 512 字符，仅放行一次；成功、变化、并发歧义或不完整输出重置链。实时分别转发 stdout/stderr，固定内存增量摘要，不保存输出；管道使子命令看不到 TTY，不是 PTY 包装器。
-  Three equal failures gate the fourth call. A nonempty single-line hypothesis (512 characters maximum) grants one execution, not permanent bypass. Success, changes, overlap or incomplete output break the chain. Streams are forwarded live and hashed separately with bounded memory; no output bodies are stored. The child sees pipes, not a PTY.
+- **sprinkle**: Requires a clean source; adds conservative EOF comments to Markdown, Go, Rust and C/C++ files only in its new managed worktree. No build or validation scripts are executed. Fixed 25% selection, one per file, 100 total; zero additions is valid. The original checkout stays unchanged, but shared Git metadata gains a branch/worktree. This is a HEAD copy, not a backup or compilation guarantee.
+- **later**: One latest card per worktree (per cwd without Git). `--next` is a nonempty single line, at most 2,000 characters. Without a foreground terminal or explicit answer it returns 125, without consuming pipes or replacing the old card.
+- **enough**: Can skip only a matching invocation with a stable snapshot within five minutes of real success. Notices use stderr; skips have empty stdout and do not extend the window. `--again` always runs and invalidates old success on failure. This is not a build cache or proof about external state.
+- **stuck**: Three equal failures gate the fourth call. A nonempty single-line hypothesis (512 characters maximum) grants one execution, not permanent bypass. Success, changes, overlap or incomplete output break the chain. Streams are forwarded live and hashed separately with bounded memory; no output bodies are stored. The child sees pipes, not a PTY.
 
-业务选项必须在子命令前；子命令之后的参数原样传递，必要时用 `--` 分隔。包装器直接执行程序，不拼接 shell；stdin 继承。
+`later resume` puts the next action first, then elapsed age and the saved snapshot; empty tracked diffs are distinct from unknown data or a clean worktree. Full HEAD, files/truncation and context warnings remain. Every `enough` skip explicitly says it was skipped and suggests `enough --again <command> [args...]`, without echoing real argv.
+
+**Known long-input limitation:** Interactive `duck/later/stuck` still use byte-limited system canonical buffers; long pastes can lose newlines or hang (duck's 600-CJK case reproduced on macOS). This is not fixed: use explicit answer options for long text, never secrets or piped answers; Ctrl+C cancels. A safe input redesign awaits separate approval. Explicitly ignored long-input regressions are not passes. See [ROADMAP.md §3.6](ROADMAP.md#36-实测修复方案实施--improvement-plan-implementation).
+
 Put wrapper options before the child command. Child arguments retain their boundaries; use `--` for disambiguation. No implicit shell is involved, and child stdin is inherited.
 
-包装器在非 Git、Git/状态/锁/指纹故障、管道或重定向 stdin、无法确认前台交互时放行真实命令，不凭不可靠信息跳过或拦截。未找到子程序返回 127，不可执行返回 126；真实退出码透传，信号映射 128+N。工具业务/持久化失败为 1，用法错误为 2，无法取得回答/主动拦截为 125。Ctrl+C 通过共享前台进程组送达；不约束自行 daemonize 的程序。
 Wrappers fail open when Git/state/locks/snapshots are unavailable or stdin is not comparable (including pipelines and redirected input). Launch errors use 127/126; real child codes pass through, signals map to 128+N. Tool errors use 1, usage errors 2, and unavailable answers/interception 125. Foreground signals reach the shared process group; deliberately daemonizing commands are outside this guarantee.
 
-所有首批工具不需要桌面、不联网、不上传、不读取 shell history、不装 shell hook；工具自身不输出 ANSI，适用于 SSH/headless、`NO_COLOR` 和 `TERM=dumb`。子命令原始输出不翻译或删改。
 All first-batch tools are desktop-free, offline and local-only, with no telemetry, history scanning or shell hooks. Tool-generated output has no ANSI escapes; child output stays untranslated and unchanged.
 
-详解 / Deep dives: [sprinkle](sprinkle/README.md) · [中文](sprinkle/README-zh.md)；[later](later/README.md) · [中文](later/README-zh.md)；[enough](enough/README.md) · [中文](enough/README-zh.md)；[stuck](stuck/README.md) · [中文](stuck/README-zh.md)。
+Deep dives: [sprinkle](sprinkle/README.md) · [later](later/README.md) · [enough](enough/README.md) · [stuck](stuck/README.md).
 
-### 本地状态、隐私与故障 / State, privacy and failures
+If symlinked state is rejected, inspect HOME/XDG_STATE_HOME components (for example macOS `/tmp → /private/tmp`); product checks never auto-canonicalize an untrusted path to bypass rejection. Trusted test temp paths are resolved first; only explicit unsupported non-UTF-8 filename capabilities are skipped, not unrelated I/O errors.
 
-状态根目录为 `${XDG_STATE_HOME:-$HOME/.local/state}/lovelaojicli/`。空/非绝对 XDG 路径回退到绝对 HOME；两者都不可用时不写 cwd 或 `/tmp`。受管理目录 0700、文件 0600；不跟随状态符号链接，不接受不可信权限。采用同目录原子替换、同步、非阻塞 OS 文件锁、版本化 JSON 与带密钥 BLAKE3 校验。锁只协调本工具，不能阻止编辑器或其他 Git 进程；权限/锁语义不可靠的网络盘或 WSL 挂载盘会拒绝记录或保守降级。
-State lives under the path above. Invalid XDG paths fall back to absolute HOME, never cwd or `/tmp`. Managed directories/files use 0700/0600, symlinks and unsafe permissions are rejected. Records use same-directory atomic replacement, sync, nonblocking OS locks, versioned JSON and keyed BLAKE3 checksums. Locks coordinate these tools only; filesystems without reliable permission/lock semantics are not promised equivalent safety.
+### State, privacy and failures
 
-包装器命令参数只保留按边界编码的本地带密钥摘要和程序 basename；不保存 argv 原文、完整 stdout/stderr 或环境变量。**下一步和假设是本地明文，勿填写密码、令牌或其他秘密**；命令行参数还可能进入 shell 历史或进程列表。仓库路径、文件名、Git 元数据和 sprinkle 补丁也可能敏感。密钥丢失/损坏会使旧记录失效，校验摘要不等于加密。
+State lives under `${XDG_STATE_HOME:-$HOME/.local/state}/lovelaojicli/`. Invalid XDG paths fall back to absolute HOME, never cwd or `/tmp`. Managed directories/files use 0700/0600, symlinks and unsafe permissions are rejected. Records use same-directory atomic replacement, sync, nonblocking OS locks, versioned JSON and keyed BLAKE3 checksums. Locks coordinate these tools only; filesystems without reliable permission/lock semantics are not promised equivalent safety.
+
 Wrapper arguments are retained only as a keyed, boundary-preserving digest plus program basename, not raw argv, output bodies or environment. **Next actions and hypotheses are plaintext: never enter secrets.** CLI values can also appear in shell history/process lists. Paths, filenames, Git metadata and sprinkle patches can be sensitive. Lost/corrupt identity keys invalidate old records; hashing is not encryption.
 
-真实执行记录和假设在相关调用时惰性清理超过 30 天的可识别、非活动记录；损坏/未知版本不盲删。latest 卡片保留到成功覆盖，活动 sprinkle 元数据不按时间删除。卸载仅删除程序和 PATH 配置，保留卡片、执行记录及 worktree。
 Recognized inactive runs/hypotheses older than 30 days are lazily pruned; unknown/corrupt records are left alone. Cards remain until successfully replaced; active sprinkle sessions never expire. Uninstallation preserves all user state and worktrees.
 
-代码快照包含 HEAD、索引条目、文件内容/删除/类型/可执行位、符号链接文本、非忽略未跟踪文件与 cwd；两次扫描核对一致性，并在执行前后比较。最多 20,000 条目、累计读取 256 MiB、5 秒扫描预算；超预算、冲突、子模块、过滤器或竞争都放弃重复优化。快照不涵盖忽略文件、网络、数据库、环境和时间，不是文件系统事务。
 Snapshots include HEAD, index entries, contents/deletions/types/modes, symlink text, nonignored untracked files and cwd. Two scans detect changes, and execution has pre/post snapshots. Budgets are 20,000 entries, 256 MiB total reads and five seconds; overflow, conflicts, submodules, configured filters or races disable optimization. This is not a filesystem transaction or evidence about ignored/external state.
 
-隐藏测试钩子：`SPRINKLE_SEED=<u64>` 固定注释选择；只保证同版本、Git 内容、locale 与候选顺序的可复现性，不控制随机资源 ID，不显示于帮助。包装器测试使用真实 PTY，不提供绕过输入安全判断的测试开关。
 Hidden test hook: `SPRINKLE_SEED=<u64>` fixes comment selection for the same version/content/locale/candidate order, not resource IDs. Wrapper tests use real PTYs, not safety-bypass flags.
 
-## 第二批工具 / Second batch
+## Second batch
 
 ```sh
-duck                          # 前台交互四问 / four foreground questions
+duck                          # four foreground questions
 duck --expected "success" --actual "timeout" --last-change "retry logic" --experiment "disable retries"
 one add "check token expiry"
-one                           # 选中一件，保持到 done / stable selection
-one done                      # 完成持久化选中项 / complete persistent selection
-cat TODO.md | one             # 临时选择，不改任务库 / temporary selection
-afk 5m                        # 安静休息；Ctrl+C 取消 / quiet break; Ctrl+C cancels
-afk 5m --color rainbow        # 彩虹跑马灯 / rainbow marquee
-afk 5m --color parts          # 默认分区固定色 / default component colors
-afk 5m --color white          # 全白 / all white
+one                           # stable selection
+one done                      # complete persistent selection
+cat TODO.md | one             # temporary selection
+afk 5m                        # quiet break; Ctrl+C cancels
+afk 5m --color rainbow        # rainbow marquee
+afk 5m --color parts          # default component colors
+afk 5m --color white          # all white
 ```
 
-- **duck**：依次输出 Expected、Actual、Last change、Next experiment，最后 `quack.`。显式参数齐全时不提问；仅对缺项询问，提示走控制终端，完整结果走 stdout。回答 trim 后须为非空单行、最多 2,000 字符，不含控制字符。缺少前台交互、EOF 或无效交互回答返回 125，stdout 留空；不把管道当回答。无落盘、AI、搜索或技术建议。
-  Four fixed answers in order, ending with `quack.`. Complete explicit arguments skip prompts; missing answers require a foreground terminal. Prompts use the controlling terminal, the complete summary uses stdout. Answers are trimmed, nonempty, single-line, at most 2,000 characters, without control characters. Missing interaction, EOF or invalid interactive input returns 125 with empty stdout; pipes are not answers. No persistence, AI, search or advice.
-- **one**：所有目录共用一个本地任务列表（最多 1,000 项，每项最多 2,000 字符，trim 后非空单行且无控制字符）。默认随机选中并保存 ID，添加任务不改变选中项；`done` 删除选中任务，下次 `one` 才重新选择。管道或文件重定向按行临时选择，过滤空行、ATX Markdown 标题、已勾选项，去除常见列表前缀；最多读取 1 MiB UTF-8、1,000 项，不是完整 Markdown parser。临时输入完全不访问状态；`add`/`done` 忽略 stdin，`/dev/null` 使用持久化列表。空列表成功；无选中项的 `done` 不会代选。状态损坏、版本未知或锁争用返回 1，不重置列表。
-  One global local list (1,000 tasks maximum; each a trimmed, nonempty single line of up to 2,000 characters, no controls). Selection is persisted until `done` removes it; adding tasks does not change it. The next bare invocation selects again. Piped/redirected UTF-8 input is temporary (1 MiB / 1,000 tasks maximum), filtering blanks, ATX headings and checked items and stripping common list prefixes; not a full Markdown parser. Temporary input never opens state. `add`/`done` ignore stdin; `/dev/null` uses persistent tasks. Empty lists succeed; `done` without selection does not select one. Corruption, unknown schemas or lock contention fail closed with exit 1.
-- **afk**：正整数加 `s/m/h`，最多 24h；单调时钟计时。合适的同一前台终端显示 Ratatui 彩色 ASCII 草地、剩余时间（`--color parts` 默认分区固定色、`rainbow` 彩虹跑马灯、`white` 全白；非空 `NO_COLOR` 优先，切换为终端默认前景色）；普通按键提示 `the grass noticed.`（中文“小草注意到了。”），不惩罚、不重置或延长时长。Ctrl+C 取消；Ctrl+Z 先恢复终端再挂起，时间继续流逝，fg 可重入、bg 不读键盘。非 TTY、输出重定向、TERM 缺失/dumb、后台或启动时小于 24×10 则安静等待，结束仅一行。不使用 Crossterm raw mode，而是保留信号的无回显/非规范输入；RAII 恢复原始 termios、光标和备用屏幕。失去前台归属时放弃旧快照，不覆盖新前台程序的设置或发送清理转义序列。仅 afk 增加 Ratatui/signal-hook/libc 依赖；SIGKILL、外部 SIGSTOP、abort 或终端断连不可保证清理。详见工具 README 的评估与恢复边界。
-  Positive integer plus `s/m/h`, up to 24h, timed monotonically. A suitable shared foreground terminal gets a colored Ratatui ASCII garden and remaining time (`--color parts` keeps default component colors, `rainbow` animates color bands, `white` is all white; nonempty `NO_COLOR` overrides all modes with the default foreground). Keys show `the grass noticed.` without penalties or timer changes. Ctrl+C cancels; Ctrl+Z restores before stopping, time keeps advancing, fg can resume and bg never reads keys. Non-TTY, redirected output, missing/dumb TERM, background startup or terminals smaller than 24×10 wait quietly and emit one completion line. Cbreak-style input retains signals, with exact termios and screen/cursor RAII restoration—not Crossterm raw mode. On foreground ownership loss, stale settings and cleanup escapes are abandoned rather than applied to the new owner. Ratatui/signal-hook/libc are scoped to afk. SIGKILL, external SIGSTOP, abort or terminal loss cannot guarantee cleanup; see the tool README for evaluation and boundaries.
+- **duck**: Four fixed answers in order, ending with `quack.`. Complete explicit arguments skip prompts; missing answers require a foreground terminal. Prompts use the controlling terminal, the complete summary uses stdout. Answers are trimmed, nonempty, single-line, at most 2,000 characters, without control characters. Missing interaction, EOF or invalid interactive input returns 125 with empty stdout; pipes are not answers. No persistence, AI, search or advice.
+- **one**: One global local list (1,000 tasks maximum; each a trimmed, nonempty single line of up to 2,000 characters, no controls). Selection is persisted until `done` removes it; adding tasks does not change it. The next bare invocation selects again. Piped/redirected UTF-8 input is temporary (1 MiB / 1,000 tasks maximum), filtering blanks, ATX headings and checked items and stripping common list prefixes; not a full Markdown parser. Temporary input never opens state. `add`/`done` ignore stdin; `/dev/null` uses persistent tasks. Empty lists succeed; `done` without selection does not select one. Corruption, unknown schemas or lock contention fail closed with exit 1.
+- **afk**: Positive integer plus `s/m/h`, up to 24h, timed monotonically. A suitable shared foreground terminal gets a colored Ratatui ASCII garden and remaining time (`--color parts` keeps default component colors, `rainbow` animates color bands, `white` is all white; nonempty `NO_COLOR` overrides all modes with the default foreground). Keys show `the grass noticed.` without penalties or timer changes. Ctrl+C cancels; Ctrl+Z restores before stopping, time keeps advancing, fg can resume and bg never reads keys. Non-TTY, redirected output, missing/dumb TERM, background startup or terminals smaller than 24×10 wait quietly and emit one completion line. Cbreak-style input retains signals, with exact termios and screen/cursor RAII restoration—not Crossterm raw mode. On foreground ownership loss, stale settings and cleanup escapes are abandoned rather than applied to the new owner. Ratatui/signal-hook/libc are scoped to afk. SIGKILL, external SIGSTOP, abort or terminal loss cannot guarantee cleanup; see the tool README for evaluation and boundaries.
 
-任务明文保存在状态根目录下 `one/tasks.json`，复用私有权限、原子写入、版本校验和非阻塞锁；完成即从列表删除，不保留完成历史，卸载保留状态。不要输入秘密；参数也可能进入 shell 历史/进程列表。duck/afk 不创建状态，不联网。第二批用法错误为 2，I/O/状态错误为 1，成功为 0；duck 无回答为 125。
+Persistent empty `one` lists suggest `one add "next small step"`; empty/fully filtered temporary input says `No selectable tasks in the input.` without opening global state. `done` without selection still never chooses a task. Nonempty output remains task text only.
+
 Tasks are local plaintext in `one/tasks.json` under the state root, with shared private permissions, atomic writes, version validation and nonblocking locks. Completion removes the task without history; uninstall preserves state. Do not enter secrets; CLI arguments can enter shell history/process lists. Duck/afk never create state; all three are offline. Usage errors return 2, I/O/state errors 1, success 0; duck without an answer returns 125.
 
-隐藏测试钩子（不在帮助中）：`ONE_SEED=<u64>` 固定同版本/候选顺序的随机选择，不影响任务 ID 或已有选中项；无效值忽略。`AFK_FAST=1` 将等待时长缩至 1%，不放宽时长校验；`AFK_TEST_FAILURE=enter|draw|panic` 在 TUI 模式注入初始化后失败/后端写错误/panic；`read-stop` 在前台检查后、首次读取输入前发送一次 SIGSTOP，由 PTY 控制器转移归属并继续进程以复现竞态。仅 TUI 模式有效，未知值忽略，只用于隔离测试。
 Hidden test hooks (not in help): `ONE_SEED=<u64>` fixes random selection for the same version/candidate order, not task IDs or existing selections; invalid values are ignored. `AFK_FAST=1` scales waits to 1% without relaxing duration validation. `AFK_TEST_FAILURE=enter|draw|panic` injects post-entry/backend-write/panic failures; `read-stop` raises SIGSTOP once between the foreground check and first input read so a PTY controller can transfer ownership and resume the process to reproduce the race. TUI mode only; unknown values are ignored, for isolated tests only.
 
-详解 / Deep dives: [duck](duck/README.md) · [中文](duck/README-zh.md)；[one](one/README.md) · [中文](one/README-zh.md)；[afk](afk/README.md) · [中文](afk/README-zh.md)。
+Deep dives: [duck](duck/README.md) · [one](one/README.md) · [afk](afk/README.md).
 
-## 第三批工具 / Third batch
+## Third batch
 
 ```sh
-goodnight                     # 只读收尾，不强制休息 / read-only session ending
-proof                         # 今天可用的本地证据 / available local evidence today
-poke add "小明"
-poke                          # 只建议问候，不发消息 / suggests, never sends
-poke remove "小明"
+goodnight                     # read-only session ending
+proof                         # available local evidence today
+poke add "Xiao Ming"
+poke                          # suggests, never sends
+poke remove "Xiao Ming"
 ```
 
-- **goodnight**：显示本地时间（含 UTC 偏移）、当前 branch/游离 HEAD、Git 未完成路径数，以及当前工作区最近记录的命令状态。数据缺失、损坏、锁争用、并发时间顺序不明时显示未知；不是测试结果检查器。工作区有未完成路径时可提示手动运行 later，绝不自动调用，不保存卡片、不锁 shell、不关闭程序或强制作息。非 Git 仍有时间和结束语。
-  Local time with UTC offset, branch/detached HEAD, Git unfinished-path count and the latest explicitly recorded command in the current workspace. Missing/corrupt/busy or ambiguously ordered data stays unknown. It does not identify test results. Unfinished paths can prompt a manual later invocation, never an automatic call. No saved card, shell lock, shutdown or enforced schedule; non-Git still gets time and a closing line.
-- **proof**：仅遍历当前 HEAD 可达的本地提交，以当前有效 Git 配置 `user.name` **和** `user.email` 原文精确匹配作者，以 committer 时间落入本地“今天”且不晚于采集开始时刻为准。提交数含合并提交；增删行只累加非合并提交（含初始提交），路径按原始字节去重；关闭 rename 检测，重命名前后算不同路径；二进制仅计路径、不编造行数。每个补丁只使用该提交的属性文件，隔离工作树/索引及全局/系统属性；存在本地 `info/attributes` 或 Git 不支持所需 `--attr-source` 时显示未知。不扫描其他分支或仓库。作者配置缺失、浅克隆、探测错误或预算不足时 Git 证据显示未知。
-  Only locally reachable history from current HEAD, matching **both** configured author name and email exactly. Commits are filtered by committer timestamp within today's local calendar boundaries, excluding future times. Commit count includes merges; line totals sum non-merge patches including root commits, with byte-exact path deduplication. Rename detection is off (old/new paths count separately); binaries contribute paths but no line counts. Each patch uses its own committed attributes, isolated from working-tree/index and global/system attribute files; local `info/attributes` or unsupported required `--attr-source` makes Git evidence unknown. No scanning of other refs/repositories. Missing identity, shallow history, failed probes or budget exhaustion makes Git evidence unknown.
-- **执行证据 / Execution evidence**：goodnight/proof 只读 enough/stuck 已有显式记录。proof 按完成时间统计当天当前 worktree（非 Git 按 cwd）的完整真实执行；成功执行不称“测试通过”，跳过/拦截、启动失败、未完成、转发不完整及未来记录不计入。没有可用证据时显示 `no recorded work.`，同时保留未知来源说明；不推断没有工作，不打分。读取不会创建目录/密钥/锁文件，不修复、不清理；使用已有共享锁，争用则显示未知。
-  Both reports read existing enough/stuck records only. Proof counts today's complete real executions by completion time in this worktree (cwd outside Git). Successful executions are not called passed tests. Skips, gates, spawn failures, unfinished/incompletely forwarded runs and future records do not count. Without available evidence it says `no recorded work.`, retaining unknown-source labels—not a claim of no work or a score. Reads never create directories/keys/lock files, repair state or prune history; existing shared locks fail conservatively on contention.
-- **poke**：全局本地名单；姓名/昵称 trim 后为非空单行、最多 200 字符且无控制字符，最多 1,000 人。大小写与 Unicode 原文精确去重；空名单、重复添加、移除不存在姓名均友好成功。均匀随机选择，可连续选同一人；只输出行动建议，不记录选择/联系历史或负债，不读取系统通讯录、不接 API、不发消息。
-  Global local list: trimmed nonempty single-line names/nicknames, at most 200 characters without controls, up to 1,000 names. Exact case/Unicode deduplication; empty lists, duplicate adds and missing removes succeed kindly. Uniform random selection permits repeats. Suggestions only: no selection/contact history, reminder debt, address-book access, API or messaging.
+- **goodnight**: Local time with UTC offset, branch/detached HEAD, Git unfinished-path count and the latest explicitly recorded command in the current workspace. Missing/corrupt/busy or ambiguously ordered data stays unknown. It does not identify test results. Unfinished paths can prompt a manual later invocation, never an automatic call. No saved card, shell lock, shutdown or enforced schedule; non-Git still gets time and a closing line.
+- **proof**: Only locally reachable history from current HEAD, matching **both** configured author name and email exactly. Commits are filtered by committer timestamp within today's local calendar boundaries, excluding future times. Commit count includes merges; line totals sum non-merge patches including root commits, with byte-exact path deduplication. Rename detection is off (old/new paths count separately); binaries contribute paths but no line counts. Each patch uses its own committed attributes, isolated from working-tree/index and global/system attribute files; local `info/attributes` or unsupported required `--attr-source` makes Git evidence unknown. No scanning of other refs/repositories. Missing identity, shallow history, failed probes or budget exhaustion makes Git evidence unknown.
+- **Execution evidence**: Both reports read existing enough/stuck records only. Proof counts today's complete real executions by completion time in this worktree (cwd outside Git). Successful executions are not called passed tests. Skips, gates, spawn failures, unfinished/incompletely forwarded runs and future records do not count. Without available evidence it says `no recorded work.`, retaining unknown-source labels—not a claim of no work or a score. Reads never create directories/keys/lock files, repair state or prune history; existing shared locks fail conservatively on contention.
+- **poke**: Global local list: trimmed nonempty single-line names/nicknames, at most 200 characters without controls, up to 1,000 names. Exact case/Unicode deduplication; empty lists, duplicate adds and missing removes succeed kindly. Uniform random selection permits repeats. Suggestions only: no selection/contact history, reminder debt, address-book access, API or messaging.
 
-本地时间仅 goodnight/proof 使用可选 `jiff` 依赖（系统时区与 zoneinfo，无内置时区数据库）；遵从系统时区/`TZ`，缺失或无效时标未知，不偷偷回退 UTC。“今天”用日历日边界，不假定 DST 日期为 24 小时。Git 探测沿用每次 5 秒/32 MiB；proof 最多 20,000 条历史、1,000 条当天本人提交、20,000 个变更路径、32 MiB 累计 numstat，并在探测间检查 10 秒采集预算；状态扫描最多 10,000 条/32 MiB、探测间检查 5 秒。超预算不输出部分数字。
 Only goodnight/proof enable optional `jiff` (system timezone and zoneinfo, no bundled database). System timezone/`TZ` failures stay unknown, never silently UTC. Local days use calendar boundaries, not fixed 24-hour DST assumptions. Git probes retain 5-second/32-MiB limits; proof caps history at 20,000 commits, today's matching commits at 1,000, changed paths at 20,000 and cumulative numstat at 32 MiB, checking a 10-second collection budget between probes. Record scans cap at 10,000 entries/32 MiB with a 5-second inter-record budget. Budget failure suppresses that source's partial numbers.
 
-poke 明文名单保存在状态根目录的 `poke/names.json`，使用既有私有权限、原子写入、校验和非阻塞锁；损坏/未知版本/不安全权限/争用返回 1，不重置。不要输入秘密；卸载保留名单。隐藏测试钩子 `POKE_SEED=<u64>` 固定同版本和名单顺序的选择，无效值忽略，不显示于帮助。
 Poke stores plaintext names in `poke/names.json` under the state root, using existing private permissions, atomic writes, validation and nonblocking locks. Corruption/unknown schema/unsafe permissions/contention returns 1 without reset. Do not enter secrets; uninstall preserves the list. Hidden `POKE_SEED=<u64>` fixes choices for the same version/list order; invalid values are ignored, and the hook is absent from help.
 
-第三批不读取 stdin，适用于 headless；成功/保守报告未知返回 0，输出/写状态错误为 1，CLI 用法错误为 2；Ctrl+C 使用默认信号行为。
 Third-batch tools never read stdin and work headlessly. Success/conservative unknown reports return 0, output/state-write errors 1, usage errors 2; Ctrl+C uses default signal handling.
 
-详解 / Deep dives: [goodnight](goodnight/README.md) · [中文](goodnight/README-zh.md)；[proof](proof/README.md) · [中文](proof/README-zh.md)；[poke](poke/README.md) · [中文](poke/README-zh.md)。
+Deep dives: [goodnight](goodnight/README.md) · [proof](proof/README.md) · [poke](poke/README.md).
 
-## 语言 / Language
+## Language
 
-按 `LC_ALL` → `LC_MESSAGES` → `LANG` 的顺序，采用首个非空值。
 The first nonempty value in `LC_ALL` → `LC_MESSAGES` → `LANG` selects the language.
 
-- `zh_CN`、`zh-CN`（也接受 `zh`）：简体中文。
-- `en_US`、`en-US`：English.
-- 缺省、`C`、`POSIX` 及其他 locale：回退到英文。Missing or unsupported locales fall back to English.
+- `zh_CN`, `zh-CN` (also `zh`): Simplified Chinese.
+- `en_US`, `en-US`: English.
+- Missing values, `C`, `POSIX` and unsupported locales fall back to English.
 
-接受 `.UTF-8`、`@modifier` 等后缀，locale 名称不区分大小写。
 Encoding/modifier suffixes are accepted; locale names are case-insensitive.
 
 ```sh
@@ -285,50 +242,43 @@ LC_ALL=en_US.UTF-8 ./target/release/love
 LC_ALL=zh_CN.UTF-8 ./target/release/joy --help
 ```
 
-帮助与默认输出已本地化；版本号不随语言变化，参数错误保留 clap 的英文诊断。
 Help and default messages are localized; versions are language-neutral, and argument errors use clap's English diagnostics.
 
-## 代码结构 / Code structure
+## Code structure
 
-按职责拆分，CLI 参数与本地记录格式不受模块划分影响。
 Modules separate responsibilities without changing CLI arguments or persisted record formats.
 
-- `afk/src/tui.rs`：计时与事件循环；`tui/terminal.rs` 管理终端恢复，`tui/signals.rs` 管理信号与 job-control mask。循环保持守卫的创建/析构顺序。
-  Timer/event loop, terminal restoration, and signal/job-control guards; guard lifetime ordering stays in the loop.
-- `sprinkle/src/`：`manifest` 管理会话元数据，`create` 编排创建事务，`plan` 生成插入计划，`scan` 检查语法边界，`verify` 校验归属，`undo` 执行可恢复撤销。
-  Session metadata, creation transaction, insertion planning, syntax checks, ownership verification, and resumable undo.
-- `one/src/`：`input` 处理独立管道输入，`tasks` 封装记录校验与稳定选择，`main` 保留 CLI 和加锁读写。
-  Isolated stdin parsing, validated task model/stable selection, and CLI/locked persistence.
-- `later/src/`：`main` 编排 CLI 与锁；`card` 管理记录和 Git 上下文采集；`card/display` 只负责展示。
-  CLI/lock orchestration, card schema/Git capture, and read-only presentation.
-- `enough/src/`、`stuck/src/`：各自的 `main` 定义参数和帮助，`policy` 定义成功提醒/失败拦截、提示文案和基线判断。
-  Each tool owns its CLI/help and policy: success reminders or failure gates, prompts, and baseline decisions.
-- `cli-common/src/repeat/`：仅共享 `execution` 失败放行执行、`protocol` 租约/锁/快照/基线持久化，以及 `records` 跨工具历史格式与查询；不按工具名分派业务逻辑。
-  Shared fail-open execution, lease/lock/snapshot/baseline persistence, and cross-tool record formats/readers; no tool-name business dispatch.
-- 工具专属源码、文案、参数、测试场景和资源放在 `<tool>/`。根目录 `tests/` 只放复用的测试支撑/参数化契约、跨工具验收及安装器测试；`scripts/` 保留工作区自动化。
-  Tool-specific code, text, arguments, test scenarios and assets live under `<tool>/`. Root `tests/` holds reusable harnesses/parameterized contracts, cross-tool acceptance and installer tests; `scripts/` holds workspace automation.
-- `cli-common/` 只依赖通用基础设施，不反向依赖工具。多个工具读写的历史记录格式（含旧记录的生产者校验和完整性规则）是共享兼容性契约；模块移动不改变磁盘格式。
-  `cli-common/` never depends on tool crates. Historical record formats used across tools, including legacy producer validation/completeness rules, remain a shared compatibility contract; module moves do not change persisted formats.
+- `afk/src/tui.rs`: Timer/event loop, terminal restoration, and signal/job-control guards; guard lifetime ordering stays in the loop.
+- `sprinkle/src/`: Session metadata, creation transaction, insertion planning, syntax checks, ownership verification, and resumable undo.
+- `one/src/`: Isolated stdin parsing, validated task model/stable selection, and CLI/locked persistence.
+- `later/src/`: CLI/lock orchestration, card schema/Git capture, and read-only presentation.
+- `enough/src/`, `stuck/src/`: Each tool owns its CLI/help and policy: success reminders or failure gates, prompts, and baseline decisions.
+- `cli-common/src/repeat/`: Shared fail-open execution, lease/lock/snapshot/baseline persistence, and cross-tool record formats/readers; no tool-name business dispatch.
+- Tool-specific code, text, arguments, test scenarios and assets live under `<tool>/`. Root `tests/` holds reusable harnesses/parameterized contracts, cross-tool acceptance and installer tests; `scripts/` holds workspace automation.
+- `cli-common/` never depends on tool crates. Historical record formats used across tools, including legacy producer validation/completeness rules, remain a shared compatibility contract; module moves do not change persisted formats.
 
-## 测试 / Tests
+## Tests
 
-保留独立本地验证脚本，不安装、不编辑 shell 配置。需要 Rust（含 rustfmt/clippy）、Cargo、Git、Python 3；执行安装器隔离测试、fmt、workspace 测试、clippy、锁定依赖 release 构建和跨工具 PTY 验收。产物位于 `target/verify/<target>/release/`。
-The local verification script never installs or edits shell configuration. Requires Rust (rustfmt/clippy), Cargo, Git and Python 3. It runs isolated installer tests, formatting, workspace tests, clippy, a locked release build and cross-tool PTY acceptance. Binaries remain in `target/verify/<target>/release/`.
+The local verification script never installs or edits shell configuration. Requires Rust (rustfmt/clippy), Cargo, Git and Python 3. It checks README links/language parity and version synchronization, then runs isolated installer tests, formatting, workspace tests, clippy, a locked release build and cross-tool PTY acceptance. Binaries remain in `target/verify/<target>/release/`.
+
+Current macOS automation (see [ROADMAP.md §3.6](ROADMAP.md#36-实测修复方案实施--improvement-plan-implementation)): 191 Rust passes, 3 explicitly ignored known long-input regressions, and 25 installer passes. Ignored/unsupported-capability cases are not passes; current Linux/WSL reruns, GUI acceptance and a safe long-input redesign remain pending.
 
 ```sh
 ./scripts/verify.sh
 
-# 或逐项执行 / Or run checks individually:
+# Or run checks individually:
 cargo fmt --all -- --check
-cargo test --locked --workspace    # 新增集成测试需要 Git 和 Python 3 / Git + Python 3 required
+cargo test --locked --workspace    # Git + Python 3 required
 cargo clippy --locked --workspace --all-targets -- -D warnings
 
-# 安装脚本测试（隔离 HOME；模拟编译器/下载，无网络）
+# Documentation links, examples and isolated version-bump tests
+python3 -m unittest discover -s tests -p 'test_documentation.py' -v
+
 # Installer tests (isolated HOME; mock compiler/downloads, no network)
 bash -n install.sh
 python3 -m unittest discover -s tests -p 'test_installer.py' -v
 
-# 跨工具真实执行/跳过/拦截验收 / Cross-tool real execution, skip and gate checks
+# Cross-tool real execution, skip and gate checks
 cargo build --locked --workspace --release
 python3 tests/report_records_pty.py target/release
 ```

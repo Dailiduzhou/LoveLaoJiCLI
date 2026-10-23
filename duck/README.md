@@ -1,5 +1,7 @@
 # duck
 
+[简体中文](README-zh.md)
+
 Explain a problem; no advice, AI, search or persistence.
 
 ```sh

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 for script in install.sh scripts/*.sh; do bash -n "$script"; done
+python3 -m unittest discover -s tests -p 'test_documentation.py' -v
 python3 -m unittest discover -s tests -p 'test_installer.py' -v
 cargo fmt --all -- --check
 cargo test --locked --workspace
