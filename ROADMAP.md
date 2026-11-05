@@ -42,8 +42,8 @@ Shared capabilities remain in `cli-common/`, without a separate framework:
 依赖已引入 clap/rand、serde/serde_json、blake3、rustix；安装器、Cargo.lock、根/工具文档和 AGENTS 状态已同步。原有四个工具的行为没有借首批交付重构。
 Dependencies and installation/documentation lists are synchronized. The original four tools retain their behavior.
 
-第二批初始交付仅复用既有依赖；rustix 用于识别 one 的 stdin 类型。当时 afk 纯文本降级；本轮经评估增加仅限 afk 的 Ratatui/signal-hook/libc，见 3.5 与工具 README。
-The initial second-batch delivery reused existing dependencies with plain-text afk. The current evaluated afk-only Ratatui/signal-hook/libc addition is documented in 3.5 and the tool README.
+第二批初始交付仅复用既有依赖；rustix 用于识别 one 的 stdin 类型。当时 afk 纯文本降级；随后经评估增加仅限 afk 的 Ratatui/signal-hook/libc，见 3.5 与工具 README。signal-hook/libc 之后经批准扩展到可选的 `cli-common/line-input`，仅由 duck/later/stuck 启用，见 3.7。
+The initial second-batch delivery reused existing dependencies with plain-text afk. The evaluated afk-only Ratatui/signal-hook/libc addition is documented in 3.5. signal-hook/libc were later approved for the optional `cli-common/line-input` feature, enabled only by duck/later/stuck (3.7).
 
 第三批增加只读状态/执行记录读取与可选本地日历日能力；jiff 仅由 goodnight/proof 通过 `cli-common/local-time` 启用 std/tz-system/tzdb-zoneinfo，已评估并同步 AGENTS。其他工具单独构建不启用 jiff，没有内置时区数据库或新终端依赖。
 Batch three adds read-only state/run inspection and optional local calendar dates. Evaluated jiff features are enabled only by goodnight/proof through `cli-common/local-time`, with AGENTS synchronized. Other tools built separately do not enable jiff; no bundled timezone database or terminal dependency was added.
@@ -62,7 +62,7 @@ These are current boundaries, not promises that future features already exist.
 | Sprinkle 创建 / Creation | 源 checkout 必须干净；当前保守拒绝子模块、配置了 checkout/clean 过滤器（含全局 LFS）的仓库、reftable-only reflog；副本是 HEAD，不是磁盘备份 / Clean HEAD copies only, with conservative repository exclusions |
 | Sprinkle 插入 / Insertion | 只考虑安全 EOF，固定 25% 选择、每文件最多一条、总计最多 100 条；不保证任意仓库可编译 / Conservative EOF-only comments, not a compilation guarantee |
 | Sprinkle 撤销 / Undo | 新提交、用户编辑、额外产物、身份/清单不确定时拒绝；未知中间态需人工检查；已完成清单作为已撤销记录保留 / Refuse uncertain deletion; some partial states need manual inspection; completed manifests remain as tombstones |
-| 交互长输入 / Long prompts | `duck/later/stuck` 仍用 canonical 行缓冲，字节上限可早于字符上限；长粘贴可能挂住/损坏，尚未修复；请用显式参数，见修复方案 / Canonical-buffer overflow remains unresolved; use explicit answer options |
+| 交互长输入 / Long prompts | `duck/later/stuck` 以非 canonical、逐字节方式读取，字符上限内完整成功，超长/无效明确拒绝；SIGKILL/外部 SIGSTOP/abort/终端断连无法保证恢复，见 3.7 / Non-canonical byte-at-a-time prompts; exact up to each limit, oversized rejected; uncatchable/disconnected paths cannot guarantee cleanup (3.7) |
 | One 输入 / Input | 管道/文件读取等待 EOF，上限 1 MiB UTF-8、过滤后 1,000 项；不是完整 Markdown parser。持久化列表全局最多 1,000 项 / Bounded, EOF-terminated temporary input; one global persistent list |
 | Afk 终端 / Terminal | 同一前台 TTY、非空/non-dumb TERM、至少 24×10 时启用 TUI，支持分区色/彩虹/全白；其他启动环境安静降级。SIGKILL/外部 SIGSTOP/abort/终端断连无法保证恢复 / Foreground suitable-terminal TUI; conservative startup fallback; uncatchable/aborting/disconnected paths cannot guarantee cleanup |
 | 只读报告 / Read-only reports | Git/时区/记录不可用时显示未知，已有共享锁争用不写状态；不是全部 shell 命令审计日志 / Unavailable sources remain unknown; existing shared locks never create state; not a complete shell audit |
@@ -224,6 +224,30 @@ Actual current checks on that environment:
 安全非规范输入设计与权限/依赖审批（B1）、跨平台/GUI 补验（D）、morning 立项（E）仍待后续确认。
 Current macOS automation is not Linux/WSL or GUI pixel acceptance. Long-input redesign remains unresolved;
 opt-in failures are separate from the passing normal suite, and morning remains a proposal.
+
+### 3.7 长输入重设计与输出错误加固 / Long-input redesign and output-error hardening
+
+本轮经批准完成 B1，并修复 stdout 写入失败导致的 panic。不新增工具、公开选项或状态格式。
+Approved B1 delivery plus stdout write-failure hardening. No new tools, public options or state formats.
+
+- **依赖边界 / Dependencies**：signal-hook/libc 扩展到可选 `cli-common/line-input`，仅 duck/later/stuck 启用；rustix 增加 `event`（poll）。未启用该 feature 时 `ask()` 失败关闭为“无回答”。AGENTS 已同步；love 等工具依赖树不含 signal-hook。
+- **读取 / Reader**：cbreak 保留 ISIG，poll 后每次 read(2) 一个字节，不读走提交换行之后的子命令输入。增量 UTF-8 与字符上限校验；存储有上限，超长拒绝。退格/Ctrl+U/Ctrl+W 使用终端配置键，转义序列丢弃，控制字符/无效字节使回答无效。
+- **生命周期 / Lifecycle**：信号标记与 SIGTTOU/SIGTTIN 线程掩码参照 afk。终止信号先恢复再以默认动作重新触发；Ctrl+Z 先恢复再停止，fg 重新快照并重绘问题；失去前台时放弃旧快照，不读不写。拒绝/取消时丢弃队列中的剩余粘贴。
+- **输出错误 / Output errors**：love/happiness/joy、later、sprinkle 的 stdout 写失败改为受控退出 1，不再 panic（101）。patience 忽略结果行写失败，保持子进程退出码。sprinkle 会话完成后报告写失败不再误报“未完成会话”。
+
+实际检查 / Actual checks（`bash scripts/verify.sh`，全部通过）：
+
+| 环境 / Environment | Rust 测试 / Rust tests | 安装器 / Installer |
+|---|---|---|
+| macOS 26.6.2 / Darwin 25.6.0 / Apple Silicon，rustc 1.99.1 | 206 passed、0 failed、0 ignored | 25 passed |
+| Linux aarch64（Docker `rust:1-trixie`，git 2.47.3），rustc 1.99.1 | 206 passed、0 failed、0 ignored | 25 passed |
+
+- 原 3 项已知长输入契约不再忽略，在两个平台均通过（每个工具 25 个边界场景，含 1999/2000/2001 字符与 canonical 缓冲边界）。新增 [duck 生命周期 PTY](duck/tests/prompt_lifecycle_pty.py)：Ctrl+C、SIGTERM、SIGHUP、Ctrl+Z→fg、后台不读不写、拒绝的粘贴不泄漏。
+- Linux 修改前诊断：canonical 模式下 600 汉字可通过，但约 2000 汉字（约 6000 字节）截断，证明该问题不只在 macOS。
+- Debian bookworm 的 git 2.39 不支持 `--attr-source`（需 2.40+），proof 按文档显示 Git 证据未知，6 项 proof 测试失败；这是环境要求，不是本轮回归。
+- 仍待 / Still pending：WSL、x86_64 Linux、GUI 终端目视/字体/主题、长时间与全部 I/O/信号竞态；morning 仍为提案。
+
+B1 is resolved with an approved, feature-gated dependency scope; both platforms pass the full suite with no ignored tests. WSL, x86_64 Linux and GUI acceptance remain pending.
 
 ## 4. 第二批：本轮交付 / Batch two: delivered this round
 

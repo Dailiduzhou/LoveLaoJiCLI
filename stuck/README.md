@@ -21,21 +21,30 @@ most 512 Unicode characters. Invalid explicit values exit 2. Wrapper flags must
 precede the child, whose argv remains unchanged; shell syntax requires explicit
 `sh -c`. Help/version/`--verison` and messages follow the common locale contract.
 
-## Known long-input limitation
+## Long interactive input
 
-Interactive input still uses the system canonical line buffer, whose **byte**
-capacity can be smaller than the application's character limit. Long pastes can
-lose bytes/newlines or wait indefinitely; macOS reproduces this with 600 Chinese
-characters in duck. This is **not fixed** by application length validation.
-For long answers use explicit `--hypothesis` values (never secrets); a pipe is not
-an interactive answer. Ctrl+C cancels a stuck prompt. A safe shared input redesign
-needs separate lifecycle/dependency approval; afk's cbreak code is not reused here.
+Prompts read the controlling terminal in non-canonical (cbreak) mode, one byte
+per read, instead of the kernel canonical line buffer. That buffer is
+byte-limited (1024 on macOS) and used to lose input or hang on long pastes. Now
+answers up to 512 characters succeed exactly, and longer or invalid ones
+are rejected (exit 125) instead of hanging. Only bytes up to the submitted
+newline are consumed.
 
-The opt-in known-failing regression is
-`cargo test -p stuck long_interactive_input_contract -- --ignored --nocapture`.
-It is ignored by the normal suite, not counted as passed. It covers canonical
-buffer and character limits with generated ASCII/CJK/mixed pastes and chunked input.
-See [ROADMAP.md](../ROADMAP.md).
+- Editing: Backspace/erase, Ctrl+U (kill line) and Ctrl+W (erase word) use the
+  terminal's configured keys; arrow/function key sequences are ignored.
+  Ctrl+D on an empty line is EOF.
+- Terminal signals stay live (ISIG): Ctrl+C/Ctrl+\ and SIGTERM/SIGHUP restore
+  termios before terminating; Ctrl+Z restores before stopping, and `fg` shows the
+  question and partial answer again. In the background it neither reads nor draws.
+- A rejected or cancelled paste is flushed, so the remainder never reaches the
+  shell or a wrapped child.
+- SIGKILL, external SIGSTOP, abort and terminal disconnect cannot guarantee
+  restoration.
+
+Explicit `--hypothesis` values skip the prompt entirely (never enter secrets; a pipe is
+not an interactive answer). `cargo test -p stuck long_interactive_input_contract`
+covers canonical-buffer and character boundaries with ASCII/CJK/mixed pastes and
+chunked input. See [ROADMAP.md](../ROADMAP.md).
 
 ## Exact failure identity
 

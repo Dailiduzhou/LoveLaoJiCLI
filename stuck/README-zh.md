@@ -17,18 +17,23 @@ EOF、空白或无效回答返回 125，不启动子命令，也不清除已有�
 工具选项放在子命令之前，argv 原样保留；shell 功能需显式写 `sh -c`。
 帮助、版本、`--verison` 和中英文提示沿用公共契约。
 
-## 已知长输入限制
+## 交互长输入
 
-交互仍使用系统 canonical 行缓冲，其**字节**容量可能小于应用的字符上限；
-长粘贴可能丢失字节/换行或一直等待。macOS 已在 duck 的 600 汉字场景复现，
-不能据此把其他调用者的全部场景都认定为已复现，也**不能声称已修复**。
-长回答请使用显式 `--hypothesis` 参数（不要填写秘密），管道不是交互回答；
-提示卡住时可 Ctrl+C 取消。安全的共享输入重设计仍需终端生命周期/依赖边界审批，
-不直接复用 afk 的 cbreak 代码。
+提问以非 canonical（cbreak）模式读取控制终端，每次读一个字节，不再依赖内核
+canonical 行缓冲。该缓冲有字节上限（macOS 为 1024），过去会让长粘贴丢失或挂住。
+现在 512 字符以内的回答可以完整成功，更长或无效的回答明确拒绝（返回 125），
+不会挂住；只读取到提交的换行为止。
 
-已知失败回归：`cargo test -p stuck long_interactive_input_contract -- --ignored --nocapture`。
-常规套件显式忽略它，不计为通过；覆盖 canonical 缓冲、字符上限、ASCII/中文/混合及分批输入。
-进度见 [路线图](../ROADMAP.md)。
+- 编辑：退格、Ctrl+U（删除整行）、Ctrl+W（删除一个词）使用终端配置的按键；
+  方向键/功能键序列被忽略；空行上的 Ctrl+D 为 EOF。
+- 终端信号保持有效（ISIG）：Ctrl+C/Ctrl+\ 以及 SIGTERM/SIGHUP 先恢复 termios
+  再结束；Ctrl+Z 先恢复再挂起，`fg` 后重新显示问题和已输入的部分；后台时不读取也不绘制。
+- 被拒绝或取消的粘贴会被丢弃，剩余内容不会流入 shell 或被包装的子命令。
+- SIGKILL、外部 SIGSTOP、abort 和终端断连无法保证恢复。
+
+显式 `--hypothesis` 参数会完全跳过提问（不要填写秘密；管道不是交互回答）。
+`cargo test -p stuck long_interactive_input_contract` 覆盖 canonical 缓冲与字符边界、
+ASCII/中文/混合粘贴及分批输入。进度见 [路线图](../ROADMAP.md)。
 
 ## 精确失败签名
 

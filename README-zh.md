@@ -150,7 +150,7 @@ stuck --hypothesis "increase timeout" cargo test
 
 `later resume` 首先显示下一步，再显示粗粒度经过时间和保存时快照；空 diff 明确为“无已跟踪文件差异”，未知数据仍为未知，保留完整 HEAD、文件/截断和偏离提示。`enough` 每次跳过均明确“本次未执行”并提示 `enough --again <命令> [参数...]`，不回显真实 argv。
 
-**已知长输入限制：** `duck/later/stuck` 交互仍受系统 canonical 行缓冲的字节上限影响，长粘贴可能丢失换行或挂住（macOS 的 duck 600 汉字已复现）。这不是已修复功能；长文本使用各自显式参数，不输入秘密，不用管道作答，卡住可 Ctrl+C。安全输入重设计仍待独立审批；常规测试显式忽略的长输入回归不计为通过。详见 [ROADMAP.md §3.6](ROADMAP.md#36-实测修复方案实施--improvement-plan-implementation)。
+**交互长输入：** `duck/later/stuck` 的提问以非 canonical、逐字节方式读取控制终端（cbreak 保留终端信号），各工具字符上限内的长回答可以完整成功，超长回答明确拒绝而不是挂住；600 汉字场景已在 Linux 和 macOS 通过。Ctrl+C/Ctrl+Z 先恢复终端再取消或挂起；被拒绝或取消的粘贴会被丢弃，不会泄漏给 shell 或被包装的子命令。SIGKILL、外部 SIGSTOP、abort 和终端断连无法保证恢复。如需完全不提问可使用显式参数；不要输入秘密，不用管道作答。
 
 业务选项必须在子命令前；子命令之后的参数原样传递，必要时用 `--` 分隔。包装器直接执行程序，不拼接 shell；stdin 继承。
 
@@ -261,7 +261,7 @@ LC_ALL=zh_CN.UTF-8 ./target/release/joy --help
 
 保留独立本地验证脚本，不安装、不编辑 shell 配置。需要 Rust（含 rustfmt/clippy）、Cargo、Git、Python 3；检查 README 链接/双语一致性和版本同步，再执行安装器隔离测试、fmt、workspace 测试、clippy、锁定依赖 release 构建和跨工具 PTY 验收。产物位于 `target/verify/<target>/release/`。
 
-本次 macOS 自动化结果见 [ROADMAP.md §3.6](ROADMAP.md#36-实测修复方案实施--improvement-plan-implementation)：191 项 Rust 测试通过、3 项已知长输入回归明确忽略，另有 25 项安装器测试通过。忽略和文件系统能力跳过不等于通过；Linux/WSL 本次重验、GUI 目视及长输入安全重设计仍待完成。
+当前自动化结果见 [ROADMAP.md §3.7](ROADMAP.md#37-长输入重设计与输出错误加固--long-input-redesign-and-output-error-hardening)：macOS 与 Linux aarch64 上 206 项 Rust 测试全部通过、无忽略项（含长输入契约），另有 25 项安装器测试通过。文件系统能力跳过不等于通过；WSL、x86_64 Linux 及 GUI 目视仍待完成。
 
 ```sh
 ./scripts/verify.sh

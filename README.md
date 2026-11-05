@@ -150,7 +150,7 @@ stuck --hypothesis "increase timeout" cargo test
 
 `later resume` puts the next action first, then elapsed age and the saved snapshot; empty tracked diffs are distinct from unknown data or a clean worktree. Full HEAD, files/truncation and context warnings remain. Every `enough` skip explicitly says it was skipped and suggests `enough --again <command> [args...]`, without echoing real argv.
 
-**Known long-input limitation:** Interactive `duck/later/stuck` still use byte-limited system canonical buffers; long pastes can lose newlines or hang (duck's 600-CJK case reproduced on macOS). This is not fixed: use explicit answer options for long text, never secrets or piped answers; Ctrl+C cancels. A safe input redesign awaits separate approval. Explicitly ignored long-input regressions are not passes. See [ROADMAP.md §3.6](ROADMAP.md#36-实测修复方案实施--improvement-plan-implementation).
+**Long interactive input:** `duck/later/stuck` prompts read the controlling terminal in a non-canonical, byte-at-a-time mode (cbreak keeps terminal signals), so long valid answers up to each tool's character limit succeed and oversized ones are rejected rather than hanging. The 600-CJK case now passes on Linux and macOS. Ctrl+C/Ctrl+Z restore the terminal before cancelling or suspending; a rejected or cancelled paste is flushed, never leaked to the shell or a wrapped child. SIGKILL, external SIGSTOP, abort and terminal disconnect cannot guarantee cleanup. Use explicit answer options to avoid prompts entirely; never enter secrets or rely on piped answers.
 
 Put wrapper options before the child command. Child arguments retain their boundaries; use `--` for disambiguation. No implicit shell is involved, and child stdin is inherited.
 
@@ -261,7 +261,7 @@ Modules separate responsibilities without changing CLI arguments or persisted re
 
 The local verification script never installs or edits shell configuration. Requires Rust (rustfmt/clippy), Cargo, Git and Python 3. It checks README links/language parity and version synchronization, then runs isolated installer tests, formatting, workspace tests, clippy, a locked release build and cross-tool PTY acceptance. Binaries remain in `target/verify/<target>/release/`.
 
-Current macOS automation (see [ROADMAP.md §3.6](ROADMAP.md#36-实测修复方案实施--improvement-plan-implementation)): 191 Rust passes, 3 explicitly ignored known long-input regressions, and 25 installer passes. Ignored/unsupported-capability cases are not passes; current Linux/WSL reruns, GUI acceptance and a safe long-input redesign remain pending.
+Current automation (see [ROADMAP.md §3.7](ROADMAP.md#37-长输入重设计与输出错误加固--long-input-redesign-and-output-error-hardening)): on macOS and Linux aarch64, 206 Rust tests pass with none ignored, including the long-input contracts, plus 25 installer tests. Unsupported-capability skips are not passes; WSL, x86_64 Linux and GUI acceptance remain pending.
 
 ```sh
 ./scripts/verify.sh
