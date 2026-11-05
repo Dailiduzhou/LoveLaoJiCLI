@@ -3,11 +3,10 @@ import os
 from pathlib import Path
 import signal
 import tempfile
-import termios
 import time
 from contextlib import contextmanager
 from types import SimpleNamespace
-from pty_support import PtySession
+from pty_support import PtySession, assert_restored
 
 
 @contextmanager
@@ -58,8 +57,9 @@ def foreground_fixture(binary, extra_env=None):
                 assert status is not None, ("product timeout", tool, session.diagnostics())
                 session.drain()
                 # The guardian is still alive; ENOTTY here is a controller error,
-                # not a reason to suppress the full termios assertion.
-                assert termios.tcgetattr(session.slave) == session.original, (tool, args)
+                # not a reason to suppress the full termios assertion. Shared
+                # prompts leave canonical mode, so use the exact Darwin-aware check.
+                assert_restored(session.slave, session.original)
                 code = os.waitstatus_to_exitcode(status)
                 assert code == expected, (args, code, session.output[-3000:])
                 assert not replies and not pending, ("missing prompts/input", replies, pending, session.output[-3000:])

@@ -1,4 +1,4 @@
-"""Tool-owned interactive save/no-overwrite checks, including opt-in long input."""
+"""Tool-owned interactive save/no-overwrite checks, including long input (--long)."""
 from pathlib import Path
 import subprocess
 import sys

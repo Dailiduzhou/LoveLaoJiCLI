@@ -1,4 +1,4 @@
-"""Known failing canonical-input regression; run explicitly, never call it fixed."""
+"""Long interactive answers: canonical/character boundaries and chunked pastes."""
 from pathlib import Path
 import subprocess
 import sys

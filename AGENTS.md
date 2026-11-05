@@ -5,7 +5,7 @@ support zh-CN and en-US. change display language according to locale (LC_ALL -> 
 share locale detection and clap scaffolding in `cli-common/`.
 Tool-specific CLI arguments, business policies, localized text, assets and test scenarios belong inside that tool's folder. `cli-common/` owns only reusable mechanisms and cross-tool data contracts, never tool-name business dispatch or dependencies on tool crates. Root `tests/` may contain reusable harnesses, parameterized shared contracts, cross-tool acceptance and installer tests; tool-specific scenarios stay under `<tool>/tests/`. Legacy shared record validation stays centralized and serialization-compatible.
 
-dependencies: clap/rand plus narrowly scoped serde/serde_json (records), blake3 (stable keyed fingerprints), and rustix (Unix ownership/foreground and stdin-type checks) are allowed for all three batches. jiff is additionally allowed only for goodnight/proof local dates and DST boundaries, through the optional cli-common/local-time feature (std/tz-system/tzdb-zoneinfo; no bundled database). For afk only, ratatui (default features off, crossterm_0_29), signal-hook (signal flags), and libc (scoped Unix job-control signal masks) are additionally allowed after terminal-lifecycle evaluation. rustix may snapshot/restore afk termios. Prefer std for everything else. workspace version stays in sync across all crates.
+dependencies: clap/rand plus narrowly scoped serde/serde_json (records), blake3 (stable keyed fingerprints), and rustix (Unix ownership/foreground and stdin-type checks) are allowed for all three batches. jiff is additionally allowed only for goodnight/proof local dates and DST boundaries, through the optional cli-common/local-time feature (std/tz-system/tzdb-zoneinfo; no bundled database). For afk only, ratatui (default features off, crossterm_0_29) is additionally allowed after terminal-lifecycle evaluation. signal-hook (signal flags) and libc (scoped Unix job-control signal masks) are allowed for afk and for the shared interactive line input, through the optional cli-common/line-input feature enabled only by duck/later/stuck. rustix may snapshot/restore afk and line-input termios. Prefer std for everything else. workspace version stays in sync across all crates.
 love/happiness/joy keep only basic flags. New tools support only the MVP business arguments in project.md part 2, plus the explicitly requested afk `--color rainbow|parts|white` display option. Test hooks are environment variables, documented in README, never in `--help`.
 
 tools (status):
@@ -30,7 +30,8 @@ tools (status):
    - afk owns termios/alternate-screen restoration, foreground checks and Ctrl+Z/fg/bg lifecycle.
    - afk --color defaults to parts; rainbow animates artwork, white uses ANSI white. Nonempty NO_COLOR overrides all modes; plain fallback stays uncolored.
    - no crossterm raw mode/event loop or cursor queries; cbreak keeps terminal signals.
-   - Ratatui/signal-hook/libc are scoped to afk; duck/one keep their existing dependencies.
+   - Ratatui is scoped to afk. signal-hook/libc are scoped to afk and cli-common/line-input (duck/later/stuck); one keeps its existing dependencies.
+   - shared prompts (cli-common/line-input) own non-canonical line input: cbreak keeps ISIG, one byte per read so later input stays queued, self-echo/editing, Ctrl+C/Ctrl+Z/fg/bg restoration, and no stale-snapshot writes after foreground loss. Without the feature, prompts fail closed as "no answer".
    - one state failures fail closed; duck/afk never open state.
    - ONE_SEED, AFK_FAST and AFK_TEST_FAILURE are hidden test hooks, not CLI options.
 

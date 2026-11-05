@@ -1,7 +1,8 @@
 """Parameterized generated text for the shared single-line input contract.
 
-These cases intentionally include known canonical-buffer failures. Do not shorten
-input or treat timeouts/truncation as success. Tool adapters own prompts, flags,
+These cases cross the kernel canonical-buffer sizes the shared non-canonical
+reader must not depend on. Do not shorten input or treat timeouts/truncation as
+success. Tool adapters own prompts, flags,
 state checks and child-input checks. No answers or private state are persisted.
 """
 import os

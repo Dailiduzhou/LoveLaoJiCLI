@@ -20,8 +20,8 @@ with foreground_fixture(binary) as f:
                           [questions[1], questions[3]])
     assert out == expected
     assert b"Expected?" not in prompts and b"Last change?" not in prompts
-    # The original 2001-byte case now lives with all long-input boundaries in
-    # long_input_pty.py: canonical overflow is still a known product failure.
+    # Long-input boundaries (including the original 2001-byte case) live in
+    # long_input_pty.py.
     for answer in [b"\x04", b"   \n"]:
         out, _, _ = run([], [(b"Expected?", answer)], expected=125)
         assert out == b""

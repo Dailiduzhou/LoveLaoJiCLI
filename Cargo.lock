@@ -181,10 +181,12 @@ dependencies = [
  "blake3",
  "clap",
  "jiff",
+ "libc",
  "rand",
  "rustix",
  "serde",
  "serde_json",
+ "signal-hook",
 ]
 
 [[package]]

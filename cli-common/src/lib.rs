@@ -144,6 +144,8 @@ pub fn text_input(value: &str, max: usize) -> Option<String> {
         .then(|| text.to_owned())
 }
 
+#[cfg(all(unix, feature = "line-input"))]
+mod line_input;
 #[cfg(feature = "local-time")]
 pub mod local_time;
 

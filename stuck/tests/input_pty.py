@@ -1,4 +1,4 @@
-"""Hypothesis/child stdin boundaries; long canonical failures are opt-in."""
+"""Hypothesis/child stdin boundaries; long input boundaries with --long."""
 from pathlib import Path
 import subprocess
 import sys

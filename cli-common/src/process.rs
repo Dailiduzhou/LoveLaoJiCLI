@@ -3,7 +3,6 @@
 use crate::Result;
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
-use std::fs::OpenOptions;
 use std::io::{self, IsTerminal, Read, Write};
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Stdio};
@@ -13,38 +12,21 @@ pub fn interactive() -> bool {
         && io::stderr().is_terminal()
         && rustix::termios::tcgetpgrp(io::stdin()).is_ok_and(|g| g == rustix::process::getpgrp())
 }
+/// Ask on the controlling terminal. Without the `line-input` feature there is
+/// no safe reader for long answers, so prompts fail closed as "no answer".
 pub fn ask(question: &str, max: usize) -> Result<Option<String>> {
     if !interactive() {
         return Ok(None);
     }
-    let Ok(mut tty) = OpenOptions::new().read(true).write(true).open("/dev/tty") else {
-        return Ok(None);
-    };
-    if !rustix::termios::tcgetpgrp(&tty).is_ok_and(|g| g == rustix::process::getpgrp()) {
-        return Ok(None);
-    }
-    if writeln!(tty, "{question}")
-        .and_then(|_| tty.flush())
-        .is_err()
+    #[cfg(feature = "line-input")]
     {
-        return Ok(None);
+        crate::line_input::read_line(question, max)
     }
-    // Read exactly one line without BufReader read-ahead into the child's future input.
-    let mut bytes = Vec::new();
-    while bytes.len() <= max * 4 {
-        let mut byte = [0u8; 1];
-        match tty.read(&mut byte) {
-            Ok(1) if byte[0] == b'\n' => {
-                return Ok(std::str::from_utf8(&bytes)
-                    .ok()
-                    .and_then(|s| crate::text_input(s, max)));
-            }
-            Ok(1) => bytes.push(byte[0]),
-            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-            _ => return Ok(None),
-        }
+    #[cfg(not(feature = "line-input"))]
+    {
+        let _ = (question, max);
+        Ok(None)
     }
-    Ok(None)
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OutputDigest {

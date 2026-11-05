@@ -23,7 +23,6 @@ fn interactive_input_preserves_tool_boundaries() {
 }
 
 #[test]
-#[ignore = "known canonical-buffer overflow; shared terminal-input design approval required"]
 fn long_interactive_input_contract() {
     input_pty(true);
 }
