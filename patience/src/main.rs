@@ -83,7 +83,7 @@ fn run() -> i32 {
     {
         Ok(child) => child,
         Err(_) => {
-            println!("{}", result_line(language, false, 0.0, 127));
+            report(&result_line(language, false, 0.0, 127));
             return 127;
         }
     };
@@ -156,8 +156,15 @@ fn run() -> i32 {
     let (stderr, stderr_truncated) = stderr_capture.join().expect("stderr capture");
     replay(&stdout, stdout_truncated, language, true);
     replay(&stderr, stderr_truncated, language, false);
-    println!("{}", result_line(language, success, child_elapsed, code));
+    report(&result_line(language, success, child_elapsed, code));
     code
+}
+
+/// Print the result line. A failed stdout write (closed pipe, full disk) is
+/// ignored so it can never replace the child's exit code.
+fn report(line: &str) {
+    let mut out = std::io::stdout().lock();
+    writeln!(out, "{line}").and_then(|_| out.flush()).ok();
 }
 
 /// One bar's whole independent performance, bound to the shared child: its
@@ -282,20 +289,17 @@ fn capture(mut pipe: impl Read) -> (Vec<u8>, bool) {
 }
 
 /// Replay captured child output after the show, with a note if truncated.
+/// Write errors are ignored: they must not replace the child's exit code.
 fn replay(bytes: &[u8], truncated: bool, language: Language, to_stdout: bool) {
+    let mut out: Box<dyn Write> = if to_stdout {
+        Box::new(std::io::stdout().lock())
+    } else {
+        Box::new(std::io::stderr().lock())
+    };
     if !bytes.is_empty() {
-        let written = if to_stdout {
-            std::io::stdout().write_all(bytes)
-        } else {
-            std::io::stderr().write_all(bytes)
-        };
-        written.ok();
+        out.write_all(bytes).ok();
         if !bytes.ends_with(b"\n") {
-            if to_stdout {
-                println!();
-            } else {
-                eprintln!();
-            }
+            out.write_all(b"\n").ok();
         }
     }
     if truncated {
@@ -303,12 +307,9 @@ fn replay(bytes: &[u8], truncated: bool, language: Language, to_stdout: bool) {
             "(child output exceeded 1 MiB and was truncated)",
             "（子命令输出超过 1MiB，已截断）",
         );
-        if to_stdout {
-            println!("{note}");
-        } else {
-            eprintln!("{note}");
-        }
+        writeln!(out, "{note}").ok();
     }
+    out.flush().ok();
 }
 
 /// One frame of every bar, stacked and refreshed in place: the first frame

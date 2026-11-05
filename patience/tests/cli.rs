@@ -251,3 +251,31 @@ fn nested_patience_with_only_flags_reports_spawn_failure() {
     assert!(stdout.contains("✗ It failed."), "{stdout:?}");
     assert!(stdout.contains("exit 127"), "{stdout:?}");
 }
+
+#[test]
+fn closed_stdout_never_replaces_the_child_exit_code() {
+    for (args, expected) in [
+        (&["sh", "-c", "echo hi; exit 3"][..], 3),
+        (&["sh", "-c", "printf partial"][..], 0),
+        (&["definitely-not-a-command-xyz"][..], 127),
+    ] {
+        let (reader, writer) = std::io::pipe().unwrap();
+        drop(reader);
+        let mut command = Command::new(BIN);
+        command
+            .args(args)
+            .env_remove("LC_ALL")
+            .env("LANG", "en_US.UTF-8")
+            .env("PATH", "/usr/bin:/bin")
+            .env("PATIENCE_FAST", "1")
+            .env("PATIENCE_SEED", "7");
+        let output = command
+            .stdout(writer)
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(expected), "{args:?} {stderr}");
+        assert!(!stderr.contains("panicked"), "{args:?} {stderr}");
+    }
+}

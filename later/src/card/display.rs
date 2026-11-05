@@ -4,12 +4,14 @@ use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 impl super::Card {
-    pub(crate) fn show(&self, repo: Option<&git::Repo>, l: Language) {
+    pub(crate) fn show(&self, repo: Option<&git::Repo>, l: Language) -> cli_common::Result<()> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .ok()
             .map(|d| d.as_secs());
-        print!("{}", self.render(now, l));
+        let mut out = std::io::stdout().lock();
+        std::io::Write::write_all(&mut out, self.render(now, l).as_bytes())?;
+        std::io::Write::flush(&mut out)?;
         if let Some(repo) = repo {
             if Some(&repo.head) != self.head.as_ref() || repo.branch != self.branch {
                 eprintln!("{}", l.text(
@@ -26,6 +28,7 @@ impl super::Card {
                 )
             );
         }
+        Ok(())
     }
 
     fn render(&self, now: Option<u64>, l: Language) -> String {

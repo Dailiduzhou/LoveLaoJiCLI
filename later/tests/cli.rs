@@ -215,3 +215,18 @@ fn locks_fail_without_overwriting() {
     code(&f.run(&["--next", "after"]), 1);
     assert_eq!(fs::read(path).unwrap(), before);
 }
+#[test]
+fn closed_stdout_fails_without_panicking() {
+    let f = Fixture::new(BIN, true);
+    let mut empty = f.cmd();
+    empty.arg("resume");
+    assert_closed_stdout_fails(empty, "later");
+    // The card is written before the confirmation; a failed report is exit 1.
+    let mut save = f.cmd();
+    save.args(["--next", "check token"]);
+    assert_closed_stdout_fails(save, "later");
+    assert!(text(&f.run(&["resume"]).stdout).starts_with("Next: check token\n"));
+    let mut resume = f.cmd();
+    resume.arg("resume");
+    assert_closed_stdout_fails(resume, "later");
+}

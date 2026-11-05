@@ -19,7 +19,7 @@ use cli_common::{
     state::{self, Store},
     Language, Result,
 };
-use std::os::unix::ffi::OsStrExt;
+use std::{io::Write, os::unix::ffi::OsStrExt};
 
 fn main() {
     if let Err(e) = run() {
@@ -75,8 +75,9 @@ fn run() -> Result<()> {
                 if verify(&manifest, false).is_err() {
                     eprintln!("{}",l.text("This is the creation-time patch; the copy has changed or is unavailable.", "以下是创建时的补丁；副本已变化或不可用。"));
                 }
-                print!("{}", manifest.patch);
-                Ok(())
+                let mut out = std::io::stdout().lock();
+                out.write_all(manifest.patch.as_bytes())?;
+                out.flush()
             } else {
                 undo(&store, &path, &mut manifest, &cwd)
             }

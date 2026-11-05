@@ -78,3 +78,22 @@ fn rejects_unknown_options_and_positional_arguments() {
         assert!(!output.stderr.is_empty());
     }
 }
+
+#[test]
+fn closed_stdout_is_a_controlled_failure() {
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    let mut command = Command::new(BIN);
+    for key in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
+        command.env_remove(key);
+    }
+    let output = command
+        .stdout(writer)
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .expect("CLI should run");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.starts_with(&format!("{NAME}: ")), "{stderr}");
+    assert!(!stderr.contains("panicked"), "{stderr}");
+}

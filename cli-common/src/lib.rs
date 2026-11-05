@@ -1,6 +1,7 @@
 //! Shared locale/CLI scaffolding and tool-independent runtime infrastructure.
 
 use clap::{Arg, ArgAction, Command};
+use std::io::Write;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Language {
@@ -36,6 +37,7 @@ impl Language {
 }
 
 /// Run a CLI with localized help and a single message when invoked without arguments.
+/// A failed stdout write (closed pipe, full disk) is a controlled exit 1, not a panic.
 pub fn run(
     name: &'static str,
     version: &'static str,
@@ -69,7 +71,11 @@ pub fn run(
                 .help(language.text("Print version", "显示版本")),
         )
         .get_matches();
-    println!("{message}");
+    let mut out = std::io::stdout().lock();
+    if let Err(e) = writeln!(out, "{message}").and_then(|_| out.flush()) {
+        eprintln!("{name}: {}", display(e.to_string()));
+        std::process::exit(1);
+    }
 }
 
 #[cfg(unix)]

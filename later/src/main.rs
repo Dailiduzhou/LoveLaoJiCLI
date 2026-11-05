@@ -8,6 +8,7 @@ use cli_common::{
     state::{self, Store},
     Language, Result,
 };
+use std::io::{self, Write};
 
 fn main() {
     let code = match run() {
@@ -59,11 +60,15 @@ fn run() -> Result<i32> {
     if matches.subcommand_name() == Some("resume") {
         let _lock = state::lock(&dir.join("workspace.lock"))?;
         let Some(card) = store.read::<Card>(&path)? else {
-            println!("{}", l.text("No saved context yet.", "暂无保存的上下文。"));
+            writeln!(
+                io::stdout().lock(),
+                "{}",
+                l.text("No saved context yet.", "暂无保存的上下文。")
+            )?;
             return Ok(0);
         };
         card.validate(&workspace)?;
-        card.show(repo.as_ref(), l);
+        card.show(repo.as_ref(), l)?;
         return Ok(0);
     }
     let next = if let Some(next) = matches.get_one::<String>("next") {
@@ -87,12 +92,13 @@ fn run() -> Result<i32> {
     let mut card = Card::capture(&workspace, &dir, repo.as_ref(), next, l);
     let _lock = state::lock(&dir.join("workspace.lock"))?;
     card.save(&store, &dir, &path)?;
-    println!(
+    writeln!(
+        io::stdout().lock(),
         "{}",
         l.text(
             "saved for tomorrow\nYou are allowed to forget this now.",
             "已为明天保存\n现在可以放心忘掉它了。"
         )
-    );
+    )?;
     Ok(0)
 }

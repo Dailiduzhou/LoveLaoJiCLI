@@ -9,7 +9,7 @@ use cli_common::{
     state::{self, Store},
     Language, Result,
 };
-use std::{ffi::OsStr, fs, os::unix::ffi::OsStrExt, path::Path};
+use std::{ffi::OsStr, fs, io::Write, os::unix::ffi::OsStrExt, path::Path};
 
 pub(super) fn undo(store: &Store, path: &Path, m: &mut Manifest, cwd: &Path) -> Result<()> {
     let target = state::path_from(&m.target);
@@ -152,9 +152,9 @@ pub(super) fn undo(store: &Store, path: &Path, m: &mut Manifest, cwd: &Path) -> 
     }
     m.phase = "done".into();
     store.write(path, m)?;
-    println!(
+    writeln!(
+        std::io::stdout().lock(),
         "{}",
         Language::detect().text("Sprinkle session undone.", "Sprinkle 会话已撤销。")
-    );
-    Ok(())
+    )
 }

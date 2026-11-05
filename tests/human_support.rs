@@ -149,6 +149,22 @@ pub fn filename_for_filesystem(root: &Path, bytes: &[u8]) -> std::ffi::OsString 
     }
 }
 
+/// Run with stdout connected to a pipe whose reader is already closed
+/// (like `| head` after it exits). Returns the status and captured stderr.
+pub fn closed_stdout(mut c: Command) -> (std::process::ExitStatus, String) {
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    let o = c.stdout(writer).stderr(Stdio::piped()).output().unwrap();
+    (o.status, text(&o.stderr))
+}
+/// The controlled failure contract for an unwritable stdout: exit 1, a
+/// `tool:`-prefixed diagnostic, and never a Rust panic.
+pub fn assert_closed_stdout_fails(c: Command, tool: &str) {
+    let (status, stderr) = closed_stdout(c);
+    assert_eq!(status.code(), Some(1), "stderr={stderr}");
+    assert!(stderr.starts_with(&format!("{tool}: ")), "{stderr}");
+    assert!(!stderr.contains("panicked"), "{stderr}");
+}
 pub fn text(b: &[u8]) -> String {
     String::from_utf8_lossy(b).into_owned()
 }

@@ -10,7 +10,7 @@ use cli_common::{
     state::{self, Store},
     Language, Result,
 };
-use std::{collections::BTreeMap, ffi::OsStr, fs, os::unix::ffi::OsStrExt, path::Path};
+use std::{collections::BTreeMap, ffi::OsStr, fs, io::Write, os::unix::ffi::OsStrExt, path::Path};
 
 pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
     let l = Language::detect();
@@ -152,20 +152,26 @@ pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
         verify(&m, false)?;
         m.phase = "active".into();
         store.write(&path, &m)?;
-        println!("{}: {}", l.text("Created", "已创建"), display(&target));
-        println!(
+        Ok(count)
+    })();
+    if let Ok(count) = result {
+        // The session is complete; a failed report write must not claim otherwise.
+        let mut out = std::io::stdout().lock();
+        writeln!(out, "{}: {}", l.text("Created", "已创建"), display(&target))?;
+        writeln!(
+            out,
             "{}: {}; {}: {}",
             l.text("Files scanned", "扫描文件"),
             m.scanned,
             l.text("Comments added", "添加注释"),
             count
-        );
+        )?;
         for (reason, count) in &m.skipped {
-            println!("{} ({reason}): {count}", l.text("Skipped", "已跳过"));
+            writeln!(out, "{} ({reason}): {count}", l.text("Skipped", "已跳过"))?;
         }
-        println!("{}",l.text("Original checkout files and branch unchanged. This is a HEAD copy, not a full disk backup.", "原 checkout 的文件与分支未改变。这是 HEAD 副本，不是磁盘目录的完整备份。"));
-        Ok(())
-    })();
+        writeln!(out, "{}", l.text("Original checkout files and branch unchanged. This is a HEAD copy, not a full disk backup.", "原 checkout 的文件与分支未改变。这是 HEAD 副本，不是磁盘目录的完整备份。"))?;
+        return out.flush();
+    }
     if result.is_err() {
         eprintln!(
             "{}: {} ({})",
@@ -177,5 +183,5 @@ pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
             m.phase
         );
     }
-    result
+    result.map(|_| ())
 }

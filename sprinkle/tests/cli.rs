@@ -299,3 +299,27 @@ impl Fixture {
             .path()
     }
 }
+#[test]
+fn closed_stdout_fails_without_panicking_or_breaking_the_session() {
+    let f = fixture();
+    let mut create = f.cmd();
+    create.arg("worktree");
+    assert_closed_stdout_fails(create, "sprinkle");
+    // The completed session is not reported as incomplete and stays usable.
+    let (_, stderr) = closed_stdout({
+        let mut c = f.cmd();
+        c.arg("diff");
+        c
+    });
+    assert!(stderr.starts_with("sprinkle: "), "{stderr}");
+    assert!(!stderr.contains("panicked"), "{stderr}");
+    let diff = f.run(&["diff"]);
+    code(&diff, 0);
+    assert!(text(&diff.stdout).contains("+//"));
+    let copy = f.copy();
+    let mut undo = f.cmd();
+    undo.arg("undo");
+    assert_closed_stdout_fails(undo, "sprinkle");
+    assert!(!copy.exists());
+    code(&f.run(&["undo"]), 1);
+}
