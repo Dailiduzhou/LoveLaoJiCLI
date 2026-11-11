@@ -9,28 +9,11 @@
 //! and the whole pattern slides one cell per tick as `phase` grows.
 
 use crate::plan::BAR_WIDTH;
+use cli_common::rainbow::{cell_colors, filled_cells};
 
 /// Phase units for one full trip around the palette. Equals the bar width so
 /// the bar spans exactly one rainbow cycle at any moment.
 pub const PERIOD: f64 = BAR_WIDTH as f64;
-
-/// Palette anchors, pinned at their position in the cycle. The first and last
-/// yellow are the same color, so the loop closes without a seam.
-const STOPS: [(f64, [u8; 3]); 13] = [
-    (0.00, [244, 207, 90]),
-    (0.13, [193, 239, 104]),
-    (0.21, [111, 233, 168]),
-    (0.29, [82, 224, 199]),
-    (0.43, [95, 195, 235]),
-    (0.56, [148, 154, 255]),
-    (0.64, [173, 140, 255]),
-    (0.70, [227, 104, 172]),
-    (0.73, [253, 86, 128]),
-    (0.78, [255, 119, 114]),
-    (0.84, [255, 166, 98]),
-    (0.90, [254, 201, 87]),
-    (1.00, [244, 207, 90]),
-];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColorLevel {
@@ -59,25 +42,6 @@ impl Style {
     }
 }
 
-/// The palette color at `phase` (phase units, wrapping every PERIOD).
-pub fn sample(phase: f64) -> [u8; 3] {
-    let position = phase.rem_euclid(PERIOD) / PERIOD;
-    for pair in STOPS.windows(2) {
-        let &(from, start) = &pair[0];
-        let &(to, stop) = &pair[1];
-        if position < to {
-            return mix(start, stop, (position - from) / (to - from));
-        }
-    }
-    STOPS[0].1
-}
-
-fn mix(from: [u8; 3], to: [u8; 3], t: f64) -> [u8; 3] {
-    std::array::from_fn(|channel| {
-        (f64::from(from[channel]) * (1.0 - t) + f64::from(to[channel]) * t).round() as u8
-    })
-}
-
 /// Build one frame of the bar line: filled cells as half-block marquee cells,
 /// empty cells plain, the readout and comfort message untouched by color.
 pub fn render_line(
@@ -87,16 +51,15 @@ pub fn render_line(
     message: &str,
     width: usize,
 ) -> String {
-    let filled = ((progress / 100.0) * width as f64).round() as usize;
-    let filled = filled.clamp(0, width);
+    let filled = filled_cells(progress, width);
     let mut line = String::from("\r");
     match style.level {
         ColorLevel::None => line.push_str(&"█".repeat(filled)),
         level => {
             for cell in 0..filled {
-                let x = cell as f64 * BAR_WIDTH as f64 / width as f64;
-                level.push_fg(sample(x + 1.5 * style.k + phase), &mut line);
-                level.push_bg(sample(x + 0.5 * style.k + phase), &mut line);
+                let (upper, lower) = cell_colors(cell, width, phase, PERIOD, style.k);
+                level.push_fg(upper, &mut line);
+                level.push_bg(lower, &mut line);
                 line.push('▀');
             }
             if filled > 0 {
@@ -331,9 +294,13 @@ fn enable_vt() {
 #[cfg(test)]
 mod tests {
     use super::{
-        ansi16, ansi256, k_from_degrees, level_from, parse_angle, parse_level, sample, ColorLevel,
-        Style, MAX_K, PERIOD,
+        ansi16, ansi256, k_from_degrees, level_from, parse_angle, parse_level, ColorLevel, Style,
+        MAX_K, PERIOD,
     };
+
+    fn sample(phase: f64) -> [u8; 3] {
+        cli_common::rainbow::sample(phase, PERIOD)
+    }
 
     fn render_line(style: &Style, progress: f64, phase: f64, message: &str) -> String {
         super::render_line(style, progress, phase, message, crate::plan::BAR_WIDTH)
