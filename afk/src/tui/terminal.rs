@@ -57,7 +57,7 @@ pub(super) fn fault_name() -> Option<String> {
 }
 fn fault(at: &str) -> Result<()> {
     if fault_name().as_deref() == Some(at) {
-        return Err(io::Error::other(format!("AFK_TEST_FAILURE={at}")));
+        return Err(io::Error::other(format!("AFK_TEST_FAILURE={at}")).into());
     }
     Ok(())
 }
@@ -73,15 +73,14 @@ impl Session {
         fail: Arc<AtomicBool>,
         area: Rect,
     ) -> Result<Terminal<CrosstermBackend<ScreenWriter>>> {
-        Terminal::with_options(
-            CrosstermBackend::new(ScreenWriter {
-                file: tty.try_clone()?,
-                fail,
-            }),
-            TerminalOptions {
-                viewport: Viewport::Fixed(area),
-            },
-        )
+        let backend = CrosstermBackend::new(ScreenWriter {
+            file: tty.try_clone()?,
+            fail,
+        });
+        let options = TerminalOptions {
+            viewport: Viewport::Fixed(area),
+        };
+        Ok(Terminal::with_options(backend, options)?)
     }
     pub(super) fn new() -> Result<Self> {
         // A stalled terminal must not block inside a frame with cbreak live.
@@ -93,7 +92,11 @@ impl Session {
             .custom_flags(rustix::fs::OFlags::NONBLOCK.bits() as i32)
             .open("/dev/tty")?;
         if !termios::tcgetpgrp(&tty).is_ok_and(|p| p == rustix::process::getpgrp()) {
-            return Err(io::Error::other("Terminal is no longer in the foreground"));
+            return Err(cli_common::message(
+                "Terminal is no longer in the foreground",
+                "终端已不在前台",
+            )
+            .into());
         }
         // Separately open, not dup+fcntl: O_NONBLOCK must never affect the shell's
         // inherited open file description. We only read the controlling terminal.
@@ -133,7 +136,7 @@ pub(super) struct ScreenWriter {
     fail: Arc<AtomicBool>,
 }
 impl io::Write for ScreenWriter {
-    fn write(&mut self, bytes: &[u8]) -> Result<usize> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         // Ratatui's Drop also writes (show cursor). Silently discard those
         // writes after ownership loss; even a cleanup diagnostic would disturb
         // the new foreground job. Reentry gets a fresh backend and snapshot.
@@ -145,7 +148,7 @@ impl io::Write for ScreenWriter {
         }
         io::Write::write(&mut self.file, bytes)
     }
-    fn flush(&mut self) -> Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         io::Write::flush(&mut self.file)
     }
 }
@@ -209,7 +212,7 @@ impl ModeGuard {
         } else {
             Ok(())
         };
-        attrs.and(screen)
+        attrs.and(screen).map_err(Into::into)
     }
 }
 impl Drop for ModeGuard {

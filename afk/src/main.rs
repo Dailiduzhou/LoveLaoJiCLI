@@ -1,17 +1,16 @@
 mod scene;
 mod tui;
-use cli_common::{command, display, Language, Result};
+use cli_common::{command, message, Language, Message, Result};
 use std::io::{self, Write};
+use std::process::ExitCode;
 use std::time::Duration;
 
-fn duration(s: &str) -> std::result::Result<Duration, String> {
+fn duration(s: &str) -> std::result::Result<Duration, Message> {
     let invalid = || {
-        Language::detect()
-            .text(
-                "Expected a positive integer followed by s/m/h, at most 24h",
-                "请输入正整数加 s/m/h，最多 24 小时",
-            )
-            .to_owned()
+        message(
+            "Expected a positive integer followed by s/m/h, at most 24h",
+            "请输入正整数加 s/m/h，最多 24 小时",
+        )
     };
     let multiplier = match s.as_bytes().last() {
         Some(b's') => 1,
@@ -31,18 +30,18 @@ fn duration(s: &str) -> std::result::Result<Duration, String> {
         .ok_or_else(invalid)?;
     Ok(Duration::from_secs(seconds))
 }
-fn main() {
+fn main() -> ExitCode {
     match run() {
         Ok(Some(signal)) => {
             // All terminal guards have already run. Preserve signal termination
             // rather than presenting a cancelled break as a normal completion.
             let _ = signal_hook::low_level::emulate_default_handler(signal);
-            std::process::exit(128 + signal);
+            cli_common::exit_status(128 + signal)
         }
-        Ok(None) => (),
+        Ok(None) => ExitCode::SUCCESS,
         Err(e) => {
-            let _ = writeln!(io::stderr().lock(), "afk: {}", display(e.to_string()));
-            std::process::exit(1);
+            cli_common::report_error("afk", &e);
+            ExitCode::FAILURE
         }
     }
 }

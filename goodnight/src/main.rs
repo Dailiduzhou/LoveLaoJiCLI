@@ -1,10 +1,14 @@
 use cli_common::{command, display, git, local_time::LocalDay, repeat, Language, Result};
 use std::io::{self, Write};
+use std::process::ExitCode;
 
-fn main() {
-    if let Err(e) = run() {
-        eprintln!("goodnight: {}", display(e.to_string()));
-        std::process::exit(1);
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            cli_common::report_error("goodnight", &e);
+            ExitCode::FAILURE
+        }
     }
 }
 fn run() -> Result<()> {
@@ -54,7 +58,11 @@ fn run() -> Result<()> {
     let records = context
         .as_ref()
         .map(|(workspace, _)| repeat::recorded_runs(workspace));
-    write_latest(&mut out, records.as_ref().and_then(|r| r.as_ref().ok()), l)?;
+    let records = records
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .map(Vec::as_slice);
+    write_latest(&mut out, records, l)?;
     if count.is_some_and(|n| n > 0) {
         writeln!(
             out,
@@ -72,7 +80,8 @@ fn run() -> Result<()> {
             "Good night. You can leave this here.",
             "晚安。可以先停在这里。"
         )
-    )
+    )?;
+    Ok(())
 }
 fn status_count(bytes: &[u8]) -> Option<usize> {
     let mut fields = bytes.split(|b| *b == 0).filter(|s| !s.is_empty());
@@ -90,7 +99,7 @@ fn status_count(bytes: &[u8]) -> Option<usize> {
 }
 fn write_latest(
     out: &mut impl Write,
-    records: Option<&Vec<repeat::RecordedRun>>,
+    records: Option<&[repeat::RecordedRun]>,
     l: Language,
 ) -> Result<()> {
     let label = l.text(
@@ -103,7 +112,8 @@ fn write_latest(
             .find(|r| r.started_at <= cli_common::state::now())
     });
     let Some(run) = latest else {
-        return writeln!(out, "{label}: {}", l.text("unknown", "未知"));
+        writeln!(out, "{label}: {}", l.text("unknown", "未知"))?;
+        return Ok(());
     };
     if records.is_some_and(|records| {
         records
@@ -112,14 +122,15 @@ fn write_latest(
             .count()
             > 1
     }) {
-        return writeln!(
+        writeln!(
             out,
             "{label}: {}",
             l.text(
                 "unknown (multiple commands started in the same second)",
                 "未知（多个命令在同一秒开始）"
             )
-        );
+        )?;
+        return Ok(());
     }
     let status = match &run.result {
         Some(o)
@@ -146,7 +157,8 @@ fn write_latest(
         status,
         l.text("started, Unix time", "开始时间，Unix 时间戳"),
         run.started_at
-    )
+    )?;
+    Ok(())
 }
 #[cfg(test)]
 mod tests {

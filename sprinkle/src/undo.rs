@@ -1,13 +1,13 @@
 //! Persisted, resumable undo phases. Verify ownership before every removal.
+use crate::error::{Error, Result};
 use crate::{
     manifest::Manifest,
     verify::{ref_log, verify},
 };
 use cli_common::{
-    error,
     git::{self, Repo},
     state::{self, Store},
-    Language, Result,
+    Language,
 };
 use std::{ffi::OsStr, fs, io::Write, os::unix::ffi::OsStrExt, path::Path};
 
@@ -15,17 +15,14 @@ pub(super) fn undo(store: &Store, path: &Path, m: &mut Manifest, cwd: &Path) -> 
     let target = state::path_from(&m.target);
     let source = state::path_from(&m.source);
     if cwd.starts_with(&target) {
-        return Err(error(
-            "Return to the original workspace before undo",
-            "请回到原工作区后再撤销",
-        ));
+        return Err(Error::ReturnToSource);
     }
     if m.phase == "ref-created"
         && fs::symlink_metadata(&target).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
     {
         // A persisted successful ref creation proves ownership; an intent alone does not.
         if ref_log(m)? != m.reflog {
-            return Err(error("Ref ownership changed", "分支归属变化"));
+            return Err(Error::RefOwnershipChanged);
         }
         m.phase = "removed".into();
         store.write(path, m)?;
@@ -41,18 +38,12 @@ pub(super) fn undo(store: &Store, path: &Path, m: &mut Manifest, cwd: &Path) -> 
     ]
     .contains(&m.phase.as_str())
     {
-        return Err(error(
-            "Incomplete transaction: ownership cannot be fully verified; inspect manually",
-            "事务未完成，无法完整验证归属；请人工检查",
-        ));
+        return Err(Error::IncompleteTransaction);
     }
     if !["removing", "removed", "deleting-ref"].contains(&m.phase.as_str()) {
         verify(m, m.phase == "restoring" || m.phase == "planned")?;
         if m.phase == "worktree-created" && !Repo::discover(&target)?.status()?.is_empty() {
-            return Err(error(
-                "Unplanned user changes; refusing undo",
-                "存在未登记修改；拒绝撤销",
-            ));
+            return Err(Error::UnplannedChanges);
         }
         m.phase = "restoring".into();
         store.write(path, m)?;
@@ -65,19 +56,16 @@ pub(super) fn undo(store: &Store, path: &Path, m: &mut Manifest, cwd: &Path) -> 
             if state::digest(&bytes) != f.after
                 || bytes.get(f.offset..) != Some(f.addition.as_bytes())
             {
-                return Err(error("Insertion no longer matches", "插入内容不再匹配"));
+                return Err(Error::InsertionMismatch);
             }
             if state::digest(&bytes[..f.offset]) != f.before {
-                return Err(error("Original fingerprint mismatch", "原始指纹不匹配"));
+                return Err(Error::OriginalFingerprintMismatch);
             }
             state::atomic(&p, &bytes[..f.offset], f.mode & 0o777)?;
         }
         let repo = verify(m, true)?;
         if !repo.status()?.is_empty() {
-            return Err(error(
-                "Restored worktree is not clean",
-                "恢复后的工作区不干净",
-            ));
+            return Err(Error::RestoredWorktreeDirty);
         }
         m.phase = "removing".into();
         store.write(path, m)?;
@@ -87,10 +75,7 @@ pub(super) fn undo(store: &Store, path: &Path, m: &mut Manifest, cwd: &Path) -> 
             Ok(_) => {
                 let repo = verify(m, true)?;
                 if !repo.status()?.is_empty() {
-                    return Err(error(
-                        "Restored worktree is not clean",
-                        "恢复后的工作区不干净",
-                    ));
+                    return Err(Error::RestoredWorktreeDirty);
                 }
                 git::run(
                     &source,
@@ -104,22 +89,16 @@ pub(super) fn undo(store: &Store, path: &Path, m: &mut Manifest, cwd: &Path) -> 
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 if fs::symlink_metadata(state::path_from(&m.git_dir)).is_ok() {
-                    return Err(error(
-                        "Partial worktree removal; inspect manually",
-                        "工作区仅部分移除；请人工检查",
-                    ));
+                    return Err(Error::PartialRemoval);
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => return Err(e.into()),
         }
         m.phase = "removed".into();
         store.write(path, m)?;
     }
     if fs::symlink_metadata(&target).is_ok() {
-        return Err(error(
-            "Target reappeared after removal",
-            "目标在移除后重新出现",
-        ));
+        return Err(Error::TargetReappeared);
     }
     let registered = git::run(&source, ["worktree", "list", "--porcelain", "-z"])?;
     let branch = format!("branch {}", m.branch);
@@ -128,10 +107,7 @@ pub(super) fn undo(store: &Store, path: &Path, m: &mut Manifest, cwd: &Path) -> 
         .split(|b| *b == 0)
         .any(|p| p == branch.as_bytes() || p == wt)
     {
-        return Err(error(
-            "Resources are still registered/in use",
-            "资源仍被登记或使用",
-        ));
+        return Err(Error::ResourcesRegistered);
     }
     let refs = git::run(&source, ["for-each-ref", "--format=%(refname)", &m.branch])?;
     let exists = refs
@@ -139,16 +115,13 @@ pub(super) fn undo(store: &Store, path: &Path, m: &mut Manifest, cwd: &Path) -> 
         .any(|r| r == m.branch.as_bytes());
     if exists {
         if ref_log(m)? != m.reflog {
-            return Err(error("Ref identity changed", "分支身份变化"));
+            return Err(Error::RefIdentityChanged);
         }
         m.phase = "deleting-ref".into();
         store.write(path, m)?;
         git::run(&source, ["update-ref", "-d", &m.branch, &m.head])?;
     } else if m.phase != "deleting-ref" {
-        return Err(error(
-            "Managed ref disappeared unexpectedly",
-            "受管理的分支意外消失",
-        ));
+        return Err(Error::RefDisappeared);
     }
     m.phase = "done".into();
     store.write(path, m)?;
@@ -156,5 +129,6 @@ pub(super) fn undo(store: &Store, path: &Path, m: &mut Manifest, cwd: &Path) -> 
         std::io::stdout().lock(),
         "{}",
         Language::detect().text("Sprinkle session undone.", "Sprinkle 会话已撤销。")
-    )
+    )?;
+    Ok(())
 }

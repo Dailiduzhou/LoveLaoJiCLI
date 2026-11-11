@@ -1,6 +1,7 @@
 //! Isolated, bounded stdin selection; never opens persistent state.
+use crate::error::{Error, Result};
 use crate::tasks::{MAX_TASKS, MAX_TEXT};
-use cli_common::{error, text_input, Result};
+use cli_common::text_input;
 use std::io::{self, Read};
 
 const MAX_PIPE: u64 = 1024 * 1024;
@@ -8,7 +9,9 @@ const MAX_PIPE: u64 = 1024 * 1024;
 pub(super) fn temporary_input() -> Result<bool> {
     // /dev/null (common in headless invocations) is not a task list. Pipes,
     // sockets and redirected regular files are; no /dev/tty fallback is used.
-    let stat = rustix::fs::fstat(io::stdin())?;
+    // cli_common::Error converts rustix::io::Errno directly, but this crate's
+    // error enum has no such impl and From never chains, so name the step.
+    let stat = rustix::fs::fstat(io::stdin()).map_err(std::io::Error::from)?;
     Ok(matches!(
         rustix::fs::FileType::from_raw_mode(stat.st_mode),
         rustix::fs::FileType::Fifo
@@ -20,26 +23,17 @@ pub(super) fn read_tasks(input: impl Read) -> Result<Vec<String>> {
     let mut bytes = Vec::new();
     input.take(MAX_PIPE + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_PIPE {
-        return Err(error("Input exceeds 1 MiB", "输入超过 1 MiB"));
+        return Err(Error::InputTooLarge);
     }
-    let input = std::str::from_utf8(&bytes)
-        .map_err(|_| error("Input must be UTF-8", "输入必须为 UTF-8"))?;
+    let input = std::str::from_utf8(&bytes).map_err(|_| Error::InputNotUtf8)?;
     let mut tasks = Vec::new();
     for line in input.lines() {
         let Some(line) = task_line(line) else {
             continue;
         };
-        let task = text_input(line, MAX_TEXT).ok_or_else(|| {
-            error(
-                "Invalid task: use a single line of at most 2000 characters",
-                "任务无效：请使用最多 2000 字符的单行文本",
-            )
-        })?;
+        let task = text_input(line, MAX_TEXT).ok_or_else(|| Error::InvalidTaskText)?;
         if tasks.len() >= MAX_TASKS {
-            return Err(error(
-                "Task limit reached (1000)",
-                "任务数量已达上限（1000）",
-            ));
+            return Err(Error::TaskLimit);
         }
         tasks.push(task);
     }

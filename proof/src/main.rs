@@ -1,10 +1,16 @@
+mod error;
 mod history;
-use cli_common::{command, display, git, local_time::LocalDay, repeat, Language, Result};
+use cli_common::{command, git, local_time::LocalDay, repeat, Language};
+use error::Result;
 use std::io::{self, Write};
-fn main() {
-    if let Err(e) = run() {
-        eprintln!("proof: {}", display(e.to_string()));
-        std::process::exit(1);
+use std::process::ExitCode;
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            cli_common::report_error("proof", &e);
+            ExitCode::FAILURE
+        }
     }
 }
 fn run() -> Result<()> {
@@ -123,5 +129,6 @@ fn run() -> Result<()> {
             "Only available records are shown; missing evidence says nothing about your work.",
             "只显示可用记录；缺少记录不代表没有工作。"
         )
-    )
+    )?;
+    Ok(())
 }

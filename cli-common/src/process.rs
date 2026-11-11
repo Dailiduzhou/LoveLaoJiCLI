@@ -102,8 +102,8 @@ pub fn execute(argv: &[OsString], capture: bool, key: [u8; 32]) -> Outcome {
         }
     };
     let readers = if capture {
-        let stdout = child.stdout.take().unwrap();
-        let stderr = child.stderr.take().unwrap();
+        let stdout = child.stdout.take().expect("stdout is piped");
+        let stderr = child.stderr.take().expect("stderr is piped");
         Some((
             std::thread::spawn(move || tee(stdout, io::stdout(), key)),
             std::thread::spawn(move || tee(stderr, io::stderr(), key)),

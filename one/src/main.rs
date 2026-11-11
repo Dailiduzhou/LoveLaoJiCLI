@@ -1,19 +1,25 @@
+mod error;
 mod input;
 mod tasks;
 
 use cli_common::{
-    command, display,
+    bounded_text, command,
     state::{self, Store},
-    text_input, Language, Result,
+    Language,
 };
+use error::Result;
 use input::{read_tasks, temporary_input};
 use std::io::{self, Write};
+use std::process::ExitCode;
 use tasks::{choose, Tasks, MAX_TEXT};
 
-fn main() {
-    if let Err(e) = run() {
-        eprintln!("one: {}", display(e.to_string()));
-        std::process::exit(1);
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            cli_common::report_error("one", &e);
+            ExitCode::FAILURE
+        }
     }
 }
 fn run() -> Result<()> {
@@ -29,15 +35,7 @@ fn run() -> Result<()> {
         command("add", l.text("Add a task", "添加任务")).arg(
             clap::Arg::new("text")
                 .required(true)
-                .value_parser(move |s: &str| {
-                    text_input(s, MAX_TEXT).ok_or_else(|| {
-                        l.text(
-                            "Expected a nonempty single line, at most 2000 characters",
-                            "请输入非空单行文本，最多 2000 个字符",
-                        )
-                        .to_owned()
-                    })
-                })
+                .value_parser(bounded_text(MAX_TEXT))
                 .help(l.text("Task (no secrets)", "任务（不要填写秘密）")),
         ),
     )
@@ -111,5 +109,6 @@ fn show(out: &mut impl Write, task: Option<&str>, l: Language, source: Source) -
             Source::Temporary =>
                 l.text("No selectable tasks in the input.", "输入中没有可选事项。"),
         })
-    )
+    )?;
+    Ok(())
 }

@@ -5,11 +5,11 @@ use super::{
     Decision, Policy, RETENTION,
 };
 use crate::{
-    display, error,
+    display,
     git::{self, Repo},
     process::{self, Outcome},
     state::{self, Store},
-    Language, Result,
+    Error, Language, Result,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -92,11 +92,12 @@ pub(super) fn prepare(
         schema_version: 1,
         record_id: generation.clone(),
         created_at: state::now(),
-        workspace_id: dir.file_name().unwrap().to_string_lossy().into_owned(),
+        workspace_id: state::workspace_id(&dir),
         tool: tool.into(),
         invocation_digest: invocation.clone(),
-        program: Path::new(&argv[0])
-            .file_name()
+        program: argv
+            .first()
+            .and_then(|program| Path::new(program).file_name())
             .map(display)
             .unwrap_or_else(|| "?".into()),
         before: before.clone(),
@@ -152,7 +153,7 @@ impl Context {
             || r.tool != self.run.tool
             || r.record_id != r.generation
         {
-            return Err(error("Invalid repeat record", "重复状态记录无效"));
+            return Err(Error::InvalidRepeatRecord);
         }
         Ok(r)
     }
@@ -191,11 +192,10 @@ impl Context {
                 code,
                 message,
             } => {
-                let b = repeat
-                    .baseline
-                    .as_mut()
-                    .expect("skip requires a matched baseline");
-                b.count = count;
+                let Some(baseline) = repeat.baseline.as_mut() else {
+                    return Err(Error::InvalidRepeatRecord);
+                };
+                baseline.count = count;
                 self.store.write(&self.state_path(), &repeat)?;
                 eprintln!("{message}");
                 return Ok(Some(code));
@@ -215,10 +215,7 @@ impl Context {
                 let _lock = state::lock(&self.dir.join("workspace.lock"))?;
                 let latest = self.read_repeat()?;
                 if latest.generation != observed {
-                    return Err(error(
-                        "Concurrent invocation changed the repeat state",
-                        "并发调用改变了重复状态",
-                    ));
+                    return Err(Error::ConcurrentRepeatChange);
                 }
                 if hypothesis.is_none() {
                     eprintln!("{refusal}");
@@ -270,16 +267,15 @@ impl Context {
             && process::interactive()
             && outcome.category == "exited";
         let baseline = if stable {
-            let snapshot = after.unwrap();
-            policy
-                .baseline(
+            after.and_then(|snapshot| {
+                let update = policy.baseline(
                     &outcome,
                     &self.store.key,
                     &self.invocation,
                     &snapshot,
                     self.previous.as_ref(),
-                )
-                .map(|update| Baseline {
+                )?;
+                Some(Baseline {
                     run_id: self.generation.clone(),
                     invocation: self.invocation.clone(),
                     snapshot,
@@ -287,6 +283,7 @@ impl Context {
                     signature: update.signature,
                     count: update.count,
                 })
+            })
         } else {
             None
         };

@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+thiserror.workspace = true
 cli-common = { workspace = true, features = ["local-time"] }
 
 [dev-dependencies]

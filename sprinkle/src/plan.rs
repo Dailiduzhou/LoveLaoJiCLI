@@ -1,22 +1,53 @@
 //! Build file fingerprints and an exact insertion patch before mutating files.
+use crate::error::Result;
 use crate::manifest::{FileRecord, Manifest};
 use cli_common::{
     git::{self, Repo},
-    state, Language, Result,
+    state, Language,
 };
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 use std::{
     fs,
     os::unix::{ffi::OsStrExt, fs::MetadataExt},
     path::Path,
 };
 
+/// Directories whose contents are generated, vendored or tool-owned.
+const EXCLUDED_DIRECTORIES: [&[u8]; 8] = [
+    b".git",
+    b"target",
+    b"vendor",
+    b"node_modules",
+    b"dist",
+    b"build",
+    b"third_party",
+    b"generated",
+];
+
+/// Extensions this conservative insertion pass understands.
+const COMMENTED_EXTENSIONS: [&str; 11] = [
+    "md", "go", "rs", "c", "h", "cc", "cpp", "cxx", "hh", "hpp", "hxx",
+];
+
+/// Why this path is skipped, or `None` when a comment may be appended.
+fn skip_reason(mode: &str, path: &[u8], extension: &str, size: u64) -> Option<&'static str> {
+    if mode == "120000" {
+        return Some("symlink");
+    }
+    if path
+        .split(|byte| *byte == b'/')
+        .any(|component| EXCLUDED_DIRECTORIES.contains(&component))
+    {
+        return Some("excluded-directory");
+    }
+    if !COMMENTED_EXTENSIONS.contains(&extension) {
+        return Some("extension");
+    }
+    (size > 1024 * 1024).then_some("size")
+}
+
 pub(super) fn plan(copy: &Repo, target: &Path, m: &mut Manifest, l: Language) -> Result<usize> {
-    let seed = std::env::var("SPRINKLE_SEED")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or_else(rand::random);
-    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let mut rng = cli_common::seeded_rng("SPRINKLE_SEED");
     let mut files = copy.tracked()?;
     files.sort_by(|a, b| a.0.cmp(&b.0));
     let mut count = 0;
@@ -39,54 +70,25 @@ pub(super) fn plan(copy: &Repo, target: &Path, m: &mut Manifest, l: Language) ->
             message: 0,
         };
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-        let reason = if mode == "120000" {
-            Some("symlink")
-        } else if p.split(|c| *c == b'/').any(|c| {
-            [
-                b".git".as_slice(),
-                b"target",
-                b"vendor",
-                b"node_modules",
-                b"dist",
-                b"build",
-                b"third_party",
-                b"generated",
-            ]
-            .contains(&c)
-        }) {
-            Some("excluded-directory")
-        } else if ![
-            "md", "go", "rs", "c", "h", "cc", "cpp", "cxx", "hh", "hpp", "hxx",
-        ]
-        .contains(&ext)
-        {
-            Some("extension")
-        } else if metadata.len() > 1024 * 1024 {
-            Some("size")
-        } else {
-            None
-        };
-        if let Some(reason) = reason {
+        if let Some(reason) = skip_reason(&mode, &p, ext, metadata.len()) {
             *m.skipped.entry(reason.into()).or_default() += 1;
             m.files.push(record);
             continue;
         }
         let bytes = fs::read(&path)?;
-        let text = std::str::from_utf8(&bytes).ok();
-        if !text.is_some_and(|t| crate::scan::safe(t, ext)) {
+        let text = std::str::from_utf8(&bytes)
+            .ok()
+            .filter(|text| crate::scan::safe(text, ext));
+        let Some(text) = text else {
             *m.skipped.entry("syntax-or-text".into()).or_default() += 1;
             m.files.push(record);
             continue;
-        }
+        };
         if rng.gen_bool(0.25) && count < 100 {
             let messages=l.text("you're doing fine|one thing at a time|this can wait|good enough is good|take your time|future-you says hi|one weird bug at a time|remember water|breathe.|tomorrow is also available", "慢一点也可以|先解决一个|今天可以到这里|能用已经很好|不着急|明天的你说你好|一次处理一个奇怪的 bug|喝口水|深呼吸|明天也可以处理");
             let messages: Vec<_> = messages.split('|').collect();
             let choice = rng.gen_range(0..messages.len());
-            let newline = if text.unwrap().contains("\r\n") {
-                "\r\n"
-            } else {
-                "\n"
-            };
+            let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
             let comment = if ext == "md" {
                 format!("<!-- {} -->", messages[choice])
             } else if ["rs", "go"].contains(&ext) {

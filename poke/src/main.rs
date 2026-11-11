@@ -1,12 +1,15 @@
+mod error;
 use cli_common::{
-    command, display, error,
+    bounded_text, command,
     state::{self, Store},
-    text_input, Language, Result,
+    text_input, Language,
 };
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use error::{Error, Result};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::{self, Write};
+use std::process::ExitCode;
 const MAX_NAMES: usize = 1000;
 const MAX_NAME: usize = 200;
 #[derive(Serialize, Deserialize)]
@@ -32,18 +35,18 @@ impl Names {
                 text_input(n, MAX_NAME).as_deref() != Some(n.as_str()) || !unique.insert(n)
             })
         {
-            return Err(error(
-                "Invalid contact list; nothing changed",
-                "名单无效；未作更改",
-            ));
+            return Err(Error::InvalidList);
         }
         Ok(())
     }
 }
-fn main() {
-    if let Err(e) = run() {
-        eprintln!("poke: {}", display(e.to_string()));
-        std::process::exit(1);
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            cli_common::report_error("poke", &e);
+            ExitCode::FAILURE
+        }
     }
 }
 fn run() -> Result<()> {
@@ -63,15 +66,7 @@ fn run() -> Result<()> {
             command(name, l.text(en, zh)).arg(
                 clap::Arg::new("name")
                     .required(true)
-                    .value_parser(move |s: &str| {
-                        text_input(s, MAX_NAME).ok_or_else(|| {
-                            l.text(
-                                "Expected a nonempty single line, at most 200 characters",
-                                "请输入非空单行文本，最多 200 个字符",
-                            )
-                            .to_owned()
-                        })
-                    })
+                    .value_parser(bounded_text(MAX_NAME))
                     .help(l.text(
                         "Name (local plaintext; no secrets)",
                         "姓名（本地明文，不要填写秘密）",
@@ -91,55 +86,53 @@ fn run() -> Result<()> {
         Some(("add", args)) => {
             let name = args.get_one::<String>("name").unwrap();
             if list.names.contains(name) {
-                return writeln!(out, "{}", l.text("Already on the list.", "已在名单中。"));
+                writeln!(out, "{}", l.text("Already on the list.", "已在名单中。"))?;
+                return Ok(());
             }
             if list.names.len() >= MAX_NAMES {
-                return Err(error("Name limit reached (1000)", "名单已达上限（1000）"));
+                return Err(Error::NameLimit);
             }
             list.names.push(name.clone());
             store.write(&path, &list)?;
-            writeln!(out, "{}", l.text("Added.", "已添加。"))
+            writeln!(out, "{}", l.text("Added.", "已添加。"))?;
         }
         Some(("remove", args)) => {
             let name = args.get_one::<String>("name").unwrap();
             if !list.names.contains(name) {
-                return writeln!(
+                writeln!(
                     out,
                     "{}",
                     l.text("That name is not on the list.", "该姓名不在名单中。")
-                );
+                )?;
+                return Ok(());
             }
             list.names.retain(|n| n != name);
             store.write(&path, &list)?;
-            writeln!(out, "{}", l.text("Removed.", "已移除。"))
+            writeln!(out, "{}", l.text("Removed.", "已移除。"))?;
         }
         _ => {
             if list.names.is_empty() {
-                return writeln!(
+                writeln!(
                     out,
                     "{}",
                     l.text(
                         "No names yet. Use poke add <name>.",
                         "暂无姓名。请使用 poke add <name>。"
                     )
-                );
+                )?;
+                return Ok(());
             }
-            let mut rng = match std::env::var("POKE_SEED")
-                .ok()
-                .and_then(|s| s.parse::<u64>().ok())
-            {
-                Some(seed) => StdRng::seed_from_u64(seed),
-                None => StdRng::from_entropy(),
-            };
-            let name = &list.names[rng.gen_range(0..list.names.len())];
+            let name =
+                &list.names[cli_common::seeded_rng("POKE_SEED").gen_range(0..list.names.len())];
             writeln!(
                 out,
                 "{}: {}",
                 l.text("If you like, say hello to", "如果愿意，向这位朋友问个好"),
                 name
-            )
+            )?;
         }
     }
+    Ok(())
 }
 #[cfg(test)]
 mod tests {

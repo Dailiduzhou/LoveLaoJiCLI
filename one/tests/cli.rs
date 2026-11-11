@@ -33,6 +33,17 @@ fn cli_basics() {
         code(&f.run(args), 2);
     }
 }
+
+#[test]
+fn closed_stderr_keeps_the_failure_code() {
+    let f = Fixture::new(BIN, false);
+    let invalid = f.root.join("invalid-utf8");
+    fs::write(&invalid, [0xff]).unwrap();
+    let mut c = f.cmd();
+    c.stdin(fs::File::open(&invalid).unwrap());
+    assert_closed_stderr_keeps_code(c, 1);
+}
+
 #[test]
 fn stable_selection_until_done_and_global_scope() {
     let f = Fixture::new(BIN, false);

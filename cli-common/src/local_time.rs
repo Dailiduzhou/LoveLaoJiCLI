@@ -1,5 +1,5 @@
 //! Local calendar dates for read-only reports, never a fixed 24-hour window.
-use crate::Result;
+use crate::{Error, Result};
 use jiff::{tz::TimeZone, Timestamp};
 
 pub struct LocalDay {
@@ -11,16 +11,16 @@ pub struct LocalDay {
 }
 impl LocalDay {
     pub fn current() -> Result<Self> {
-        let zone = TimeZone::try_system().map_err(std::io::Error::other)?;
+        let zone = TimeZone::try_system().map_err(Error::TimeZoneUnavailable)?;
         Self::at(Timestamp::now(), zone)
     }
     pub fn at(now: Timestamp, zone: TimeZone) -> Result<Self> {
         let local = now.to_zoned(zone);
-        let start = local.start_of_day().map_err(std::io::Error::other)?;
+        let start = local.start_of_day().map_err(Error::LocalDateUnavailable)?;
         let end = start
             .tomorrow()
             .and_then(|z| z.start_of_day())
-            .map_err(std::io::Error::other)?;
+            .map_err(Error::LocalDateUnavailable)?;
         Ok(Self {
             local_time: local.strftime("%Y-%m-%d %H:%M:%S %:z").to_string(),
             date: local.date().to_string(),

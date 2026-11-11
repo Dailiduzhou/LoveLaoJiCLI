@@ -1,26 +1,28 @@
 #[cfg(not(unix))]
 compile_error!("The first batch supports Linux/macOS/WSL Unix only");
 mod card;
+mod error;
 
 use card::Card;
 use cli_common::{
-    command, display, git, process,
+    command, git, process,
     state::{self, Store},
-    Language, Result,
+    Language,
 };
+use error::Result;
 use std::io::{self, Write};
+use std::process::ExitCode;
 
-fn main() {
-    let code = match run() {
+fn main() -> ExitCode {
+    match run() {
         Ok(code) => code,
         Err(e) => {
-            eprintln!("later: {}", display(e.to_string()));
-            1
+            cli_common::report_error("later", &e);
+            ExitCode::FAILURE
         }
-    };
-    std::process::exit(code);
+    }
 }
-fn run() -> Result<i32> {
+fn run() -> Result<ExitCode> {
     let l = Language::detect();
     let matches = command(
         "later",
@@ -34,11 +36,7 @@ fn run() -> Result<i32> {
         clap::Arg::new("next")
             .long("next")
             .value_name("text")
-            .value_parser(|s: &str| {
-                cli_common::text_input(s, 2000).ok_or_else(|| {
-                    "Expected a nonempty single line, at most 2000 characters".to_string()
-                })
-            })
+            .value_parser(cli_common::bounded_text(2000))
             .help(l.text(
                 "Next action (local plaintext; no secrets)",
                 "下一步（本地明文；不要填写秘密）",
@@ -65,11 +63,11 @@ fn run() -> Result<i32> {
                 "{}",
                 l.text("No saved context yet.", "暂无保存的上下文。")
             )?;
-            return Ok(0);
+            return Ok(ExitCode::SUCCESS);
         };
         card.validate(&workspace)?;
         card.show(repo.as_ref(), l)?;
-        return Ok(0);
+        return Ok(ExitCode::SUCCESS);
     }
     let next = if let Some(next) = matches.get_one::<String>("next") {
         Some(next.clone())
@@ -87,7 +85,7 @@ fn run() -> Result<i32> {
                 "无法取得回答；请使用 --next <text>。未保存任何内容。"
             )
         );
-        return Ok(125);
+        return Ok(ExitCode::from(125));
     };
     let mut card = Card::capture(&workspace, &dir, repo.as_ref(), next, l);
     let _lock = state::lock(&dir.join("workspace.lock"))?;
@@ -100,5 +98,5 @@ fn run() -> Result<i32> {
             "已为明天保存\n现在可以放心忘掉它了。"
         )
     )?;
-    Ok(0)
+    Ok(ExitCode::SUCCESS)
 }
