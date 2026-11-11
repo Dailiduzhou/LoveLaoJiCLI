@@ -58,6 +58,8 @@ jobs:
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - name: Test installer on the native platform
         run: python3 -m unittest discover -s tests -p 'test_installer.py' -v
+      - name: Validate encourage CLI and terminal lifecycle natively
+        run: cargo test --locked -p encourage --all-targets
       - name: Build, smoke test and package
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
