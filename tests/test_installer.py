@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 mkdir -p "$target/$host/release"
-for tool in love happiness joy patience sprinkle later enough stuck duck one afk goodnight proof poke; do
+for tool in love happiness joy patience sprinkle later enough stuck duck one afk goodnight proof poke encourage; do
     printf '#!/bin/sh\\nprintf "%s 0.1.0\\\\n"\\n' "$tool" > "$target/$host/release/$tool"
     chmod +x "$target/$host/release/$tool"
 done
@@ -171,6 +171,7 @@ class LocalInstallerTests(InstallerFixture):
             "goodnight",
             "proof",
             "poke",
+            "encourage",
         ]:
             self.assertTrue((self.bin_dir / tool).is_file())
         saved_state = self.home / ".local/state/lovelaojicli/keep-card"
@@ -197,6 +198,7 @@ class LocalInstallerTests(InstallerFixture):
             "goodnight",
             "proof",
             "poke",
+            "encourage",
         ]:
             self.assertFalse((self.bin_dir / tool).exists())
         self.run_script("uninstall")
@@ -338,7 +340,7 @@ class LocalInstallerTests(InstallerFixture):
         self.assertEqual(list(self.home.iterdir()), [])
 
 
-TOOLS = "love happiness joy patience sprinkle later enough stuck duck one afk goodnight proof poke".split()
+TOOLS = "love happiness joy patience sprinkle later enough stuck duck one afk goodnight proof poke encourage".split()
 
 
 class ReleaseInstallerTests(InstallerFixture):
