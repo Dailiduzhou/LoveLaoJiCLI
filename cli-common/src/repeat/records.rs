@@ -1,10 +1,9 @@
 //! Persisted execution schema, pruning, and read-only history views.
 use super::{current, RETENTION};
 use crate::{
-    error,
     process::Outcome,
     state::{self, Store},
-    Result,
+    Error, Result,
 };
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, time::Instant};
@@ -142,25 +141,19 @@ pub fn recorded_runs(workspace: &Path) -> Result<Vec<RecordedRun>> {
     let start = Instant::now();
     for (n, entry) in fs::read_dir(runs)?.enumerate() {
         if n >= 10_000 || start.elapsed().as_secs() >= 5 {
-            return Err(error(
-                "Execution record scan exceeded budget",
-                "执行记录扫描超出预算",
-            ));
+            return Err(Error::RecordScanBudget);
         }
         let entry = entry?;
         if !entry.file_type()?.is_file() {
-            return Err(error("Invalid execution record type", "执行记录类型无效"));
+            return Err(Error::InvalidRecordType);
         }
         bytes = bytes.saturating_add(entry.metadata()?.len());
         if bytes > 32 * 1024 * 1024 {
-            return Err(error(
-                "Execution records exceed 32 MiB",
-                "执行记录超过 32 MiB",
-            ));
+            return Err(Error::RecordsTooLarge);
         }
         let run: Run = store
             .read(&entry.path())?
-            .ok_or_else(|| error("Execution record disappeared", "执行记录消失"))?;
+            .ok_or_else(|| Error::RecordDisappeared)?;
         if !valid_run(&run, &dir)
             || run.record_id.len() != 32
             || !run.record_id.bytes().all(|b| b.is_ascii_hexdigit())
@@ -174,7 +167,7 @@ pub fn recorded_runs(workspace: &Path) -> Result<Vec<RecordedRun>> {
                 .zip(run.started_at)
                 .is_some_and(|(f, s)| f < s)
         {
-            return Err(error("Invalid execution record", "执行记录无效"));
+            return Err(Error::InvalidExecutionRecord);
         }
         if let Some(o) = &run.result {
             let valid = match o.category.as_str() {
@@ -187,13 +180,13 @@ pub fn recorded_runs(workspace: &Path) -> Result<Vec<RecordedRun>> {
                 _ => false,
             };
             if !valid {
-                return Err(error("Invalid execution outcome", "执行结果无效"));
+                return Err(Error::InvalidExecutionOutcome);
             }
         }
         result.push(RecordedRun {
             tool: run.tool,
             program: run.program,
-            started_at: run.started_at.unwrap(),
+            started_at: run.started_at.ok_or(Error::InvalidExecutionRecord)?,
             finished_at: run.finished_at,
             result: run.result,
         });

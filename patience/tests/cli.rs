@@ -60,14 +60,22 @@ fn rejects_unknown_options() {
 #[test]
 fn help_is_localized() {
     for flag in ["--help", "-h"] {
-        for (locale, heading, help, version) in [
-            ("en-US", "Usage:", "Print help", "Print version"),
-            ("zh-CN", "用法：", "显示帮助", "显示版本"),
+        // The usage line must keep naming the wrapped command in both locales:
+        // a bare "[选项]" would hide that patience needs one.
+        for (locale, heading, help, version, command) in [
+            (
+                "en-US",
+                "Usage:",
+                "Print help",
+                "Print version",
+                "[command]",
+            ),
+            ("zh-CN", "用法：", "显示帮助", "显示版本", "<命令>"),
         ] {
             let output = invoke(&[flag], &[("LANG", locale)], &[]);
             assert!(output.status.success(), "{output:?}");
             let text = String::from_utf8(output.stdout).unwrap();
-            for expected in [NAME, heading, help, version, "--help", "--version"] {
+            for expected in [NAME, heading, help, version, "--help", "--version", command] {
                 assert!(text.contains(expected), "missing {expected:?} in {text:?}");
             }
         }

@@ -1,6 +1,7 @@
 #[cfg(not(unix))]
 compile_error!("The first batch supports Linux/macOS/WSL Unix only");
 mod create;
+mod error;
 mod manifest;
 mod plan;
 mod scan;
@@ -14,17 +15,21 @@ use crate::{
     verify::verify,
 };
 use cli_common::{
-    command, display, error,
+    command,
     git::Repo,
     state::{self, Store},
-    Language, Result,
+    Language,
 };
-use std::{io::Write, os::unix::ffi::OsStrExt};
+use error::{Error, Result};
+use std::{io::Write, os::unix::ffi::OsStrExt, process::ExitCode};
 
-fn main() {
-    if let Err(e) = run() {
-        eprintln!("sprinkle: {}", display(e.to_string()));
-        std::process::exit(1);
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            cli_common::report_error("sprinkle", &e);
+            ExitCode::FAILURE
+        }
     }
 }
 fn run() -> Result<()> {
@@ -67,17 +72,15 @@ fn run() -> Result<()> {
                 if !["active", "restoring", "removed", "done"].contains(&manifest.phase.as_str())
                     || state::digest(manifest.patch.as_bytes()) != manifest.patch_hash
                 {
-                    return Err(error(
-                        "Insertion patch is not complete",
-                        "插入补丁尚未完整生成",
-                    ));
+                    return Err(Error::PatchIncomplete);
                 }
                 if verify(&manifest, false).is_err() {
                     eprintln!("{}",l.text("This is the creation-time patch; the copy has changed or is unavailable.", "以下是创建时的补丁；副本已变化或不可用。"));
                 }
                 let mut out = std::io::stdout().lock();
                 out.write_all(manifest.patch.as_bytes())?;
-                out.flush()
+                out.flush()?;
+                Ok(())
             } else {
                 undo(&store, &path, &mut manifest, &cwd)
             }

@@ -8,29 +8,37 @@
 //! exit code passes through.
 
 mod curve;
+mod error;
 mod layout;
 mod messages;
 mod plan;
 mod rainbow;
 
 use std::io::{Read, Write};
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Command, ExitCode, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
 use clap::{Arg, ArgAction, Command as ClapCommand};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
-use cli_common::Language;
+use cli_common::{exit_status, Language};
+use error::{Error, Result};
 use messages::Comfort;
 use plan::{BAR_WIDTH, OUTPUT_CAP};
 use rainbow::{Style, PERIOD};
 
-fn main() {
-    std::process::exit(run());
+fn main() -> ExitCode {
+    match run() {
+        Ok(code) => code,
+        Err(e) => {
+            cli_common::report_error("patience", &e);
+            ExitCode::FAILURE
+        }
+    }
 }
 
-fn run() -> i32 {
+fn run() -> Result<ExitCode> {
     let language = Language::detect();
     let matches = build_command(language).get_matches();
     let tokens: Vec<String> = matches
@@ -48,7 +56,7 @@ fn run() -> i32 {
                 "用法：patience <命令> [参数...]——没命令可等的耐心不是耐心",
             )
         );
-        return 2;
+        return Ok(ExitCode::from(2));
     }
 
     // Hidden test hooks, intentionally not in --help: PATIENCE_FAST compresses
@@ -84,11 +92,11 @@ fn run() -> i32 {
         Ok(child) => child,
         Err(_) => {
             report(&result_line(language, false, 0.0, 127));
-            return 127;
+            return Ok(exit_status(127));
         }
     };
-    let stdout_pipe = child.stdout.take().expect("child stdout is piped");
-    let stderr_pipe = child.stderr.take().expect("child stderr is piped");
+    let stdout_pipe = child.stdout.take().ok_or(Error::OutputReader)?;
+    let stderr_pipe = child.stderr.take().ok_or(Error::OutputReader)?;
     let stdout_capture = std::thread::spawn(move || capture(stdout_pipe));
     let stderr_capture = std::thread::spawn(move || capture(stderr_pipe));
 
@@ -101,13 +109,13 @@ fn run() -> i32 {
     if animation.is_some() {
         rainbow::prepare_terminal(&style);
     }
-    let mut status: Option<ExitStatus> = None;
+    let mut child_status: Option<ExitStatus> = None;
     let mut child_elapsed = 0.0;
     let mut redrawn = false;
-    loop {
-        if status.is_none() {
-            if let Some(exit) = child.try_wait().expect("child should be waitable") {
-                status = Some(exit);
+    let status = loop {
+        if child_status.is_none() {
+            if let Some(exit) = child.try_wait()? {
+                child_status = Some(exit);
                 child_elapsed = show_start.elapsed().as_secs_f64();
             }
         }
@@ -116,20 +124,17 @@ fn run() -> i32 {
             show.advance(elapsed);
         }
         redraw(&mut animation, &style, &shows, elapsed / tick, &mut redrawn);
-        if status.is_some() && elapsed >= min_show {
-            break;
+        if let (Some(exit), true) = (child_status, elapsed >= min_show) {
+            break exit;
         }
-        let wait = if status.is_some() {
+        let wait = if child_status.is_some() {
             (min_show - elapsed).clamp(0.0, tick)
         } else {
             tick
         };
         std::thread::sleep(Duration::from_secs_f64(wait));
-    }
-
-    let Some(status) = status else {
-        unreachable!("the loop breaks only after the child exits");
     };
+
     let code = exit_code(&status);
     let success = status.success();
 
@@ -152,12 +157,12 @@ fn run() -> i32 {
         }
     }
 
-    let (stdout, stdout_truncated) = stdout_capture.join().expect("stdout capture");
-    let (stderr, stderr_truncated) = stderr_capture.join().expect("stderr capture");
+    let (stdout, stdout_truncated) = stdout_capture.join().map_err(|_| Error::OutputReader)?;
+    let (stderr, stderr_truncated) = stderr_capture.join().map_err(|_| Error::OutputReader)?;
     replay(&stdout, stdout_truncated, language, true);
     replay(&stderr, stderr_truncated, language, false);
     report(&result_line(language, success, child_elapsed, code));
-    code
+    Ok(exit_status(code))
 }
 
 /// Print the result line. A failed stdout write (closed pipe, full disk) is

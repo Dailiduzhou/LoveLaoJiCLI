@@ -165,6 +165,23 @@ pub fn assert_closed_stdout_fails(c: Command, tool: &str) {
     assert!(stderr.starts_with(&format!("{tool}: ")), "{stderr}");
     assert!(!stderr.contains("panicked"), "{stderr}");
 }
+/// Run with stderr connected to a pipe whose reader is already closed, the way
+/// `2> >(head -c0)` behaves. Returns only the status: no diagnostic can arrive.
+pub fn closed_stderr(mut c: Command) -> std::process::ExitStatus {
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    c.stderr(writer)
+        .stdout(Stdio::piped())
+        .output()
+        .unwrap()
+        .status
+}
+/// The matching contract for an unwritable stderr: the diagnostic is dropped,
+/// the documented exit code survives, and nothing panics (`eprintln!` would
+/// exit 101 here).
+pub fn assert_closed_stderr_keeps_code(c: Command, code: i32) {
+    assert_eq!(closed_stderr(c).code(), Some(code));
+}
 pub fn text(b: &[u8]) -> String {
     String::from_utf8_lossy(b).into_owned()
 }
@@ -187,7 +204,8 @@ pub fn basics(bin: &'static str, tool: &str) {
             format!("{tool} {}\n", env!("CARGO_PKG_VERSION"))
         );
     }
-    for locale in ["C", "zh_CN.UTF-8"] {
+    let mut usages = Vec::new();
+    for (locale, heading) in [("C", "Usage:"), ("zh_CN.UTF-8", "用法：")] {
         let o = f
             .cmd()
             .arg("--help")
@@ -196,9 +214,36 @@ pub fn basics(bin: &'static str, tool: &str) {
             .unwrap();
         code(&o, 0);
         let t = text(&o.stdout);
-        assert!(t.contains(if locale == "C" { "Usage" } else { "用法" }));
+        assert!(t.contains(heading), "missing {heading:?} in {t:?}");
+        let usage = usage_body(&t, heading);
+        assert!(!usage.is_empty(), "missing usage lines in {t:?}");
+        usages.push(usage);
     }
+    // A hand-written usage line hides subcommands and required positionals:
+    // `later resume`, `afk <duration>`, `sprinkle <COMMAND>` all live in
+    // clap's `{usage}`, so both locales must render the same shape.
+    assert_eq!(
+        usages[0], usages[1],
+        "{tool} usage must describe the same commands and arguments in both locales"
+    );
     code(&f.run(&["--unknown"]), 2);
+}
+
+/// The body of the localized usage block, one trimmed line per usage variant.
+fn usage_body(help: &str, heading: &str) -> Vec<String> {
+    let mut lines = help.lines().skip_while(|line| !line.starts_with(heading));
+    let Some(first) = lines.next() else {
+        return vec![];
+    };
+    let mut body = vec![first[heading.len()..].trim().to_owned()];
+    for line in lines {
+        let line = line.trim();
+        if line.is_empty() {
+            break;
+        }
+        body.push(line.to_owned());
+    }
+    body
 }
 
 /// Custom validation diagnostics follow the same locale priority as help.

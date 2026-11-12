@@ -1,5 +1,5 @@
 //! Words and slot rules only. No runtime sentence strings or string templates.
-use crate::{Error, Language};
+use crate::{GenerationError, Language};
 use std::collections::BTreeSet;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -220,26 +220,30 @@ pub fn punctuation(mark: Mark, language: Language) -> &'static str {
     }
 }
 
-pub fn validate(frame: &Frame) -> Result<(), Error> {
+pub fn validate(frame: &Frame) -> Result<(), GenerationError> {
     if frame.slots.len() < 2 {
-        return Err(Error::InvalidCorpus("at least two variable slots"));
+        return Err(GenerationError::InvalidCorpus(
+            "at least two variable slots",
+        ));
     }
     for slot in frame.slots {
         if slot.variants.is_empty() {
-            return Err(Error::EmptyCandidates);
+            return Err(GenerationError::EmptyCandidates);
         }
         if slot.variants.len() < 2 {
-            return Err(Error::InvalidCorpus("not a variable slot"));
+            return Err(GenerationError::InvalidCorpus("not a variable slot"));
         }
         let unique: BTreeSet<_> = slot.variants.iter().copied().collect();
         if unique.len() != slot.variants.len() {
-            return Err(Error::InvalidCorpus(
+            return Err(GenerationError::InvalidCorpus(
                 "duplicate implicitly weighted alternative",
             ));
         }
         for variant in slot.variants {
             if variant.is_empty() || variant.iter().any(|a| !matches!(a, Atom::Word(_))) {
-                return Err(Error::InvalidCorpus("alternatives must expand to words"));
+                return Err(GenerationError::InvalidCorpus(
+                    "alternatives must expand to words",
+                ));
             }
             for atom in *variant {
                 validate_atom(*atom, frame.language)?;
@@ -247,24 +251,26 @@ pub fn validate(frame: &Frame) -> Result<(), Error> {
         }
         for atom in slot.before {
             if matches!(atom, Atom::End | Atom::Punctuation(Mark::Period)) {
-                return Err(Error::InvalidCorpus("premature sentence end"));
+                return Err(GenerationError::InvalidCorpus("premature sentence end"));
             }
             validate_atom(*atom, frame.language)?;
         }
     }
     if !frame.suffix.ends_with(&[P(Period), End]) {
-        return Err(Error::InvalidCorpus("missing period and end boundary"));
+        return Err(GenerationError::InvalidCorpus(
+            "missing period and end boundary",
+        ));
     }
     for atom in &frame.suffix[..frame.suffix.len() - 1] {
         if *atom == End {
-            return Err(Error::InvalidCorpus("early end boundary"));
+            return Err(GenerationError::InvalidCorpus("early end boundary"));
         }
         validate_atom(*atom, frame.language)?;
     }
     Ok(())
 }
 
-fn validate_atom(atom: Atom, language: Language) -> Result<(), Error> {
+fn validate_atom(atom: Atom, language: Language) -> Result<(), GenerationError> {
     if let Atom::Word(text) = atom {
         let valid = match language {
             Language::Chinese => {
@@ -274,7 +280,9 @@ fn validate_atom(atom: Atom, language: Language) -> Result<(), Error> {
             Language::English => !text.is_empty() && text.bytes().all(|b| b.is_ascii_lowercase()),
         };
         if !valid {
-            return Err(Error::InvalidCorpus("expected short, safe word atom"));
+            return Err(GenerationError::InvalidCorpus(
+                "expected short, safe word atom",
+            ));
         }
     }
     Ok(())

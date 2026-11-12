@@ -1,5 +1,5 @@
 //! Basic ANSI colors only; no terminal probing or background assumptions.
-use cli_common::Language;
+use cli_common::{message, Message};
 use ratatui::{
     buffer::Buffer,
     style::{Color, Style},
@@ -13,17 +13,15 @@ pub(crate) enum ColorMode {
     White,
 }
 impl ColorMode {
-    pub(crate) fn parse(value: &str) -> Result<Self, String> {
+    pub(crate) fn parse(value: &str) -> Result<Self, Message> {
         match value {
             "parts" => Ok(Self::Parts),
             "rainbow" => Ok(Self::Rainbow),
             "white" => Ok(Self::White),
-            _ => Err(Language::detect()
-                .text(
-                    "Expected rainbow, parts or white",
-                    "请输入 rainbow、parts 或 white",
-                )
-                .to_owned()),
+            _ => Err(message(
+                "Expected rainbow, parts or white",
+                "请输入 rainbow、parts 或 white",
+            )),
         }
     }
 }

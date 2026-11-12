@@ -1,26 +1,21 @@
 use clap::{builder::StringValueParser, Arg};
-use cli_common::{command, display, Language};
-use encourage::{duration::PlaybackDuration, pipeline, rng, tui};
+use cli_common::{command, exit_status, report_error, Error as Common, Language};
+use encourage::{duration::PlaybackDuration, error::Result, pipeline, rng, tui};
 use std::io::{self, Write};
+use std::process::ExitCode;
 
-fn main() {
+fn main() -> ExitCode {
     match run() {
-        Ok(Exit::Success) => {}
-        Ok(Exit::Usage) => std::process::exit(2),
+        Ok(Exit::Success) => ExitCode::SUCCESS,
+        Ok(Exit::Usage) => exit_status(2),
         Ok(Exit::Signal(signal)) => {
             // The TUI has already restored its terminal and dropped all guards.
             let _ = signal_hook::low_level::emulate_default_handler(signal);
-            std::process::exit(128 + signal);
+            exit_status(128 + signal)
         }
         Err(error) => {
-            let language = Language::detect();
-            let _ = writeln!(
-                io::stderr().lock(),
-                "encourage: {}: {}",
-                language.text("Could not complete encouragement", "未能完成鼓励"),
-                display(error.to_string())
-            );
-            std::process::exit(1);
+            report_error("encourage", &error);
+            ExitCode::FAILURE
         }
     }
 }
@@ -31,7 +26,7 @@ enum Exit {
     Signal(i32),
 }
 
-fn run() -> io::Result<Exit> {
+fn run() -> Result<Exit> {
     let language = Language::detect();
     let matches = command(
         "encourage",
@@ -92,19 +87,19 @@ fn run() -> io::Result<Exit> {
         .flatten()
         .map(String::as_str)
         .collect();
-    let seed = rng::seed(&args).map_err(|_| {
-        io::Error::other(language.text("System randomness unavailable", "系统随机源不可用"))
-    })?;
+    // The only reachable failure here is the OS entropy source: explicit text
+    // never touches it.
+    let seed = rng::seed(&args).map_err(|_| Common::EntropyUnavailable)?;
 
     let sentence = if tui::is_interactive() {
-        let generation = pipeline::generate(seed, language).map_err(io::Error::other)?;
+        let generation = pipeline::generate(seed, language)?;
         match tui::run(&generation, language, duration)? {
             tui::Outcome::Plain | tui::Outcome::Confirmed => generation.sentence,
             tui::Outcome::Cancelled => return Ok(Exit::Success),
             tui::Outcome::Signal(signal) => return Ok(Exit::Signal(signal)),
         }
     } else {
-        pipeline::generate_plain(seed, language).map_err(io::Error::other)?
+        pipeline::generate_plain(seed, language)?
     };
     let mut out = io::stdout().lock();
     writeln!(out, "{sentence}")?;

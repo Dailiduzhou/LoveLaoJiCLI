@@ -1,5 +1,6 @@
-use cli_common::{command, display, process, text_input, Language, Result};
+use cli_common::{bounded_text, command, process, Language, Result};
 use std::io::{self, Write};
+use std::process::ExitCode;
 
 const QUESTIONS: [(&str, &str, &str); 4] = [
     ("expected", "Expected", "预期结果"),
@@ -8,18 +9,17 @@ const QUESTIONS: [(&str, &str, &str); 4] = [
     ("experiment", "Next experiment", "下一次实验"),
 ];
 
-fn main() {
-    let code = match run() {
+fn main() -> ExitCode {
+    match run() {
         Ok(code) => code,
         Err(e) => {
-            eprintln!("duck: {}", display(e.to_string()));
-            1
+            cli_common::report_error("duck", &e);
+            ExitCode::FAILURE
         }
-    };
-    std::process::exit(code);
+    }
 }
 
-fn run() -> Result<i32> {
+fn run() -> Result<ExitCode> {
     let l = Language::detect();
     let mut cli = command(
         "duck",
@@ -33,15 +33,7 @@ fn run() -> Result<i32> {
             clap::Arg::new(name)
                 .long(name)
                 .value_name("text")
-                .value_parser(move |s: &str| {
-                    text_input(s, 2000).ok_or_else(|| {
-                        l.text(
-                            "Expected a nonempty single line, at most 2000 characters",
-                            "请输入非空单行文本，最多 2000 个字符",
-                        )
-                        .to_owned()
-                    })
-                })
+                .value_parser(bounded_text(2000))
                 .help(l.text(en, zh)),
         );
     }
@@ -57,7 +49,7 @@ fn run() -> Result<i32> {
                 "No valid answer available; provide --expected, --actual, --last-change and --experiment.",
                 "无法取得有效回答；请提供 --expected、--actual、--last-change 和 --experiment。"
             ));
-            return Ok(125);
+            return Ok(ExitCode::from(125));
         };
         answers.push(answer);
     }
@@ -67,5 +59,5 @@ fn run() -> Result<i32> {
         writeln!(out, "{}: {}", l.text(en, zh), answer)?;
     }
     writeln!(out, "quack.")?;
-    Ok(0)
+    Ok(ExitCode::SUCCESS)
 }

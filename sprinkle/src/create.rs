@@ -1,24 +1,22 @@
 //! Create the managed worktree and persist each transaction phase.
+use crate::error::{Error, Result};
 use crate::{
     manifest::Manifest,
     plan::plan,
     verify::{ref_log, verify},
 };
 use cli_common::{
-    display, error,
+    display,
     git::{self, Repo},
     state::{self, Store},
-    Language, Result,
+    Language,
 };
 use std::{collections::BTreeMap, ffi::OsStr, fs, io::Write, os::unix::ffi::OsStrExt, path::Path};
 
 pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
     let l = Language::detect();
     if !repo.status()?.is_empty() {
-        return Err(error(
-            "Source checkout must be clean, including untracked files",
-            "源工作区必须干净，包括未跟踪文件",
-        ));
+        return Err(Error::DirtySource);
     }
     for marker in [
         "MERGE_HEAD",
@@ -30,7 +28,7 @@ pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
         "BISECT_LOG",
     ] {
         if repo.git_dir.join(marker).exists() {
-            return Err(error("Git operation in progress", "Git 操作尚未结束"));
+            return Err(Error::GitOperationInProgress);
         }
     }
     let tracked = repo.tracked()?;
@@ -46,20 +44,14 @@ pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
             if triple.len() == 3
                 && ![b"unspecified".as_slice(), b"unset".as_slice()].contains(&triple[2])
             {
-                return Err(error(
-                    "Files use checkout filters",
-                    "文件使用 checkout 过滤器",
-                ));
+                return Err(Error::CheckoutFilters);
             }
         }
     }
     let id = state::id();
     let time = state::now();
     let branch = format!("refs/heads/sprinkle/{time}-{}", &id[..12]);
-    let parent = repo
-        .root
-        .parent()
-        .ok_or_else(|| error("No worktree parent", "工作区没有父目录"))?;
+    let parent = repo.root.parent().ok_or_else(|| Error::NoWorktreeParent)?;
     let target = parent.join(format!(
         "{}-sprinkled-{}",
         repo.root
@@ -69,7 +61,7 @@ pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
         &id[..12]
     ));
     if fs::symlink_metadata(&target).is_ok() {
-        return Err(error("Target already exists", "目标已存在"));
+        return Err(Error::TargetExists);
     }
     let session = dir.join(&id);
     state::private_dir(&session)?;
@@ -116,13 +108,16 @@ pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
         m.reflog = ref_log(&m)?;
         store.write(&path, &m)?;
         state::private_dir(&target)?;
+        let Some(branch) = m.branch.strip_prefix("refs/heads/") else {
+            return Err(Error::InvalidRef);
+        };
         let args = vec![
             OsStr::new("worktree"),
             OsStr::new("add"),
             OsStr::new("--no-checkout"),
             OsStr::new("--"),
             target.as_os_str(),
-            OsStr::new(m.branch.strip_prefix("refs/heads/").unwrap()),
+            OsStr::new(branch),
         ];
         git::run(&repo.root, args)?;
         git::ensure_no_filters(&target)?;
@@ -134,7 +129,7 @@ pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
         m.phase = "worktree-created".into();
         store.write(&path, &m)?;
         if !copy.status()?.is_empty() {
-            return Err(error("HEAD checkout is not clean", "HEAD 副本不干净"));
+            return Err(Error::HeadCheckoutDirty);
         }
         let count = plan(&copy, &target, &mut m, l)?;
         m.phase = "planned".into();
@@ -143,7 +138,7 @@ pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
         for f in m.files.iter().filter(|f| !f.addition.is_empty()) {
             let path = git::safe_path(&target, &f.path)?;
             if git::fingerprint(&path)? != f.before {
-                return Err(error("File changed before insertion", "插入前文件发生变化"));
+                return Err(Error::FileChangedBeforeInsertion);
             }
             let mut bytes = fs::read(&path)?;
             bytes.extend_from_slice(f.addition.as_bytes());
@@ -170,7 +165,8 @@ pub(super) fn create(store: &Store, dir: &Path, repo: &Repo) -> Result<()> {
             writeln!(out, "{} ({reason}): {count}", l.text("Skipped", "已跳过"))?;
         }
         writeln!(out, "{}", l.text("Original checkout files and branch unchanged. This is a HEAD copy, not a full disk backup.", "原 checkout 的文件与分支未改变。这是 HEAD 副本，不是磁盘目录的完整备份。"))?;
-        return out.flush();
+        out.flush()?;
+        return Ok(());
     }
     if result.is_err() {
         eprintln!(

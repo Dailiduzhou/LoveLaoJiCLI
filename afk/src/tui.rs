@@ -16,6 +16,14 @@ use terminal::{eligible, fault_name, foreground, viewport, Session};
 
 const FRAME: Duration = Duration::from_millis(100);
 
+/// Restore the terminal and forget the session; the caller decides what next.
+fn close(session: &mut Option<Session>) -> Result<()> {
+    match session.take() {
+        Some(mut active) => active.mode.restore(),
+        None => Ok(()),
+    }
+}
+
 pub fn run(
     wait: Duration,
     language: Language,
@@ -40,30 +48,22 @@ pub fn run(
     loop {
         let signal = signals.terminate.load(Ordering::SeqCst) as i32;
         if signal != 0 {
-            if let Some(mut s) = session.take() {
-                let _ = s.mode.restore();
-            }
+            let _ = close(&mut session);
             return Ok(Some(signal));
         }
         if signals.suspend.swap(false, Ordering::SeqCst) {
-            if let Some(mut s) = session.take() {
-                s.mode.restore()?;
-            }
+            close(&mut session)?;
             // signal-hook emulates a stop with SIGSTOP, including in orphaned
             // process groups. No UI/termios state is left live while stopped.
             signal_hook::low_level::emulate_default_handler(SIGTSTP)?;
             continue;
         }
         if start.elapsed() >= wait {
-            if let Some(mut s) = session.take() {
-                s.mode.restore()?;
-            }
+            close(&mut session)?;
             return Ok(None);
         }
         if !foreground() {
-            if let Some(mut s) = session.take() {
-                s.mode.restore()?;
-            }
+            close(&mut session)?;
             // A background continuation never reads keys, draws, or reacquires
             // the terminal. The original deadline still advances.
         } else {
@@ -107,7 +107,7 @@ pub fn run(
                             e.kind(),
                             io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
                         ) => {}
-                    Err(e) => return Err(e),
+                    Err(e) => return Err(e.into()),
                 }
                 let area = viewport(&s.mode.tty)?;
                 if s.terminal.get_frame().area() != area {

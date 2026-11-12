@@ -187,6 +187,7 @@ dependencies = [
  "serde",
  "serde_json",
  "signal-hook",
+ "thiserror",
 ]
 
 [[package]]
@@ -389,6 +390,7 @@ dependencies = [
  "ratatui",
  "rustix",
  "signal-hook",
+ "thiserror",
 ]
 
 [[package]]
@@ -599,6 +601,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -723,6 +726,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -789,6 +793,7 @@ dependencies = [
  "cli-common",
  "rand",
  "rustix",
+ "thiserror",
 ]
 
 [[package]]
@@ -801,6 +806,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -849,6 +855,7 @@ dependencies = [
  "cli-common",
  "rustix",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -1107,6 +1114,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]

@@ -7,8 +7,9 @@ mod progress;
 mod signals;
 mod terminal;
 
+use crate::error::{Error, Result};
 use crate::{duration::PlaybackDuration, pipeline::Generation, source::Source};
-use cli_common::{Language, Result};
+use cli_common::Language;
 use playback::{Action, Key, Playback, PlaybackState};
 use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGTSTP};
 use signals::{JobControlMask, Signals};
@@ -47,7 +48,7 @@ pub fn run(
     if !eligible() {
         return Ok(Outcome::Plain);
     }
-    let source = Source::embedded().map_err(io::Error::other)?;
+    let source = Source::embedded()?;
     run_ready(generation, &source, language, duration)
 }
 
@@ -72,9 +73,7 @@ fn run_ready(
     language: Language,
     duration: PlaybackDuration,
 ) -> Result<Outcome> {
-    source
-        .validate_trace(&generation.trace)
-        .map_err(io::Error::other)?;
+    source.validate_trace(&generation.trace)?;
     let colors = !std::env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
 
     // Declaration order is a safety contract: Session drops before the signal
@@ -124,9 +123,7 @@ fn run_ready(
         playback.set_background(false);
         if session.is_none() {
             if !available() {
-                return Err(io::Error::other(
-                    "interactive terminal became unavailable during replay",
-                ));
+                return Err(Error::TerminalUnavailable);
             }
             // Resize below the minimum is an in-session pause, never a plain
             // fallback. Session supports the bounded tiny viewport for a hint.
@@ -168,7 +165,7 @@ fn run_ready(
                 {
                     Action::Continue
                 }
-                Err(error) => return Err(error),
+                Err(error) => return Err(error.into()),
             }
         };
         match action {

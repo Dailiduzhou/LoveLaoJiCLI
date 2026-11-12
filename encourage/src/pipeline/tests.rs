@@ -96,7 +96,7 @@ fn errors_and_post_revision_budgets_never_produce_a_fallback_sentence() {
                 }
             )
             .unwrap_err(),
-            Error::DrawBudget
+            GenerationError::DrawBudget
         );
     }
     for script in [vec![], vec![0], vec![0, 0], vec![0, 0, 0]] {
@@ -108,7 +108,7 @@ fn errors_and_post_revision_budgets_never_produce_a_fallback_sentence() {
                 Limits::default()
             )
             .unwrap_err(),
-            Error::RandomSourceEnded
+            GenerationError::RandomSourceEnded
         );
     }
     assert_eq!(
@@ -122,7 +122,7 @@ fn errors_and_post_revision_budgets_never_produce_a_fallback_sentence() {
             }
         )
         .unwrap_err(),
-        Error::DrawBudget
+        GenerationError::DrawBudget
     );
     let script = [0, 1, 1, 0];
     let full = generate_words(
@@ -163,14 +163,14 @@ fn errors_and_post_revision_budgets_never_produce_a_fallback_sentence() {
                 bytes: full.sentence.len() - 1,
                 ..Limits::default()
             },
-            Error::ByteBudget,
+            GenerationError::ByteBudget,
         ),
         (
             Limits {
                 atoms: full.trace.stages["28.passed"].observed - 1,
                 ..Limits::default()
             },
-            Error::AtomBudget,
+            GenerationError::AtomBudget,
         ),
     ] {
         assert_eq!(

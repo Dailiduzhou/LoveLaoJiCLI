@@ -1,6 +1,6 @@
 //! Bounded local Git probes and conservative content snapshots; no shell or external diff.
 use crate::state::{digest, path_from};
-use crate::{error, Result};
+use crate::{Error, Message, Result};
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::Read;
@@ -18,10 +18,7 @@ pub fn ensure_no_filters(cwd: &Path) -> Result<()> {
             .next()
             .is_some_and(|key| key.starts_with(b"filter."))
     }) {
-        return Err(error(
-            "Checkout/clean filters are configured; refusing to execute repository code",
-            "配置了 checkout/clean 过滤器；拒绝执行仓库相关代码",
-        ));
+        return Err(Error::GitFiltersConfigured);
     }
     Ok(())
 }
@@ -67,7 +64,7 @@ fn collect(mut r: impl Read) -> Result<Vec<u8>> {
     r.by_ref().take(32 * 1024 * 1024 + 1).read_to_end(&mut b)?;
     if b.len() > 32 * 1024 * 1024 {
         std::io::copy(&mut r, &mut std::io::sink())?;
-        return Err(error("Git output exceeded budget", "Git 输出超出预算"));
+        return Err(Error::GitOutputBudget);
     }
     Ok(b)
 }
@@ -81,8 +78,8 @@ pub fn output(command: &mut Command) -> Result<Vec<u8>> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    let out = child.stdout.take().unwrap();
-    let err = child.stderr.take().unwrap();
+    let out = child.stdout.take().expect("stdout is piped");
+    let err = child.stderr.take().expect("stderr is piped");
     let a = std::thread::spawn(move || collect(out));
     let b = std::thread::spawn(move || collect(err));
     let start = Instant::now();
@@ -93,21 +90,18 @@ pub fn output(command: &mut Command) -> Result<Vec<u8>> {
         if start.elapsed() > Duration::from_secs(5) {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(error("Git probe timed out", "Git 探测超时"));
+            return Err(Error::GitTimeout);
         }
         std::thread::sleep(Duration::from_millis(5));
     };
-    let out = a
-        .join()
-        .map_err(|_| error("Git reader failed", "Git 读取失败"))??;
-    let err = b
-        .join()
-        .map_err(|_| error("Git reader failed", "Git 读取失败"))??;
+    let out = a.join().map_err(|_| Error::GitReaderFailed)??;
+    let err = b.join().map_err(|_| Error::GitReaderFailed)??;
     if !status.success() {
-        return Err(error(
-            &format!("Git failed: {}", crate::display(OsStr::from_bytes(&err))),
-            &format!("Git 失败：{}", crate::display(OsStr::from_bytes(&err))),
-        ));
+        let detail = crate::display(OsStr::from_bytes(&err));
+        return Err(Error::GitFailed(Message::new(
+            format!("Git failed: {detail}"),
+            format!("Git 失败：{detail}"),
+        )));
     }
     Ok(out)
 }
@@ -128,7 +122,7 @@ pub struct Repo {
 impl Repo {
     pub fn discover(cwd: &Path) -> Result<Self> {
         if run(cwd, ["rev-parse", "--is-bare-repository"])? != b"false\n" {
-            return Err(error("Not a non-bare repository", "不是普通工作区仓库"));
+            return Err(Error::NotARepository);
         }
         let root = path_from(&line(run(cwd, ["rev-parse", "--show-toplevel"])?)).canonicalize()?;
         let git_dir =
@@ -139,7 +133,7 @@ impl Repo {
         )?))
         .canonicalize()?;
         let head = String::from_utf8(line(run(cwd, ["rev-parse", "--verify", "HEAD"])?))
-            .map_err(std::io::Error::other)?;
+            .map_err(|_| Error::HeadNotUtf8)?;
         let branch = run(cwd, ["symbolic-ref", "--quiet", "HEAD"])
             .ok()
             .map(|b| String::from_utf8_lossy(&line(b)).into_owned());
@@ -175,14 +169,11 @@ impl Repo {
             let tab = entry
                 .iter()
                 .position(|b| *b == b'\t')
-                .ok_or_else(|| error("Invalid index", "索引无效"))?;
+                .ok_or_else(|| Error::InvalidIndex)?;
             let header = String::from_utf8_lossy(&entry[..tab]);
             let bits: Vec<_> = header.split(' ').collect();
             if bits.len() != 3 || bits[2] != "0" || bits[0] == "160000" {
-                return Err(error(
-                    "Conflicts or submodules are not comparable",
-                    "冲突或子模块无法可靠比较",
-                ));
+                return Err(Error::IncomparableIndex);
             }
             files.push((entry[tab + 1..].to_vec(), bits[0].to_owned()));
         }
@@ -194,10 +185,7 @@ impl Repo {
         let a = self.scan(cwd, &start, &mut budget)?;
         let b = self.scan(cwd, &start, &mut budget)?;
         if a != b {
-            return Err(error(
-                "Files changed during snapshot",
-                "文件在快照期间发生变化",
-            ));
+            return Err(Error::SnapshotChanged);
         }
         Ok(a)
     }
@@ -222,7 +210,7 @@ impl Repo {
         files.sort();
         files.dedup();
         if files.len() > 20_000 {
-            return Err(error("Snapshot entry budget exceeded", "快照条目超出预算"));
+            return Err(Error::SnapshotEntryBudget);
         }
         let mut h = blake3::Hasher::new();
         for b in [
@@ -237,7 +225,7 @@ impl Repo {
         }
         for p in files {
             if start.elapsed() > Duration::from_secs(5) {
-                return Err(error("Snapshot timed out", "快照超时"));
+                return Err(Error::SnapshotTimeout);
             }
             let path = safe_path(&self.root, &p)?;
             add(&mut h, &p);
@@ -245,14 +233,14 @@ impl Repo {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                     add(&mut h, b"deleted");
                 }
-                Err(e) => return Err(e),
+                Err(e) => return Err(e.into()),
                 Ok(m) => {
                     add(&mut h, &(m.mode() & 0o170777).to_le_bytes());
                     let bytes = if m.file_type().is_symlink() {
                         fs::read_link(&path)?.as_os_str().as_bytes().to_vec()
                     } else if m.is_file() {
                         if m.len() > *budget {
-                            return Err(error("Snapshot byte budget exceeded", "快照字节超出预算"));
+                            return Err(Error::SnapshotByteBudget);
                         }
                         let mut f = std::fs::OpenOptions::new()
                             .read(true)
@@ -263,17 +251,17 @@ impl Repo {
                             .open(&path)?;
                         let fm = f.metadata()?;
                         if !fm.is_file() || fm.ino() != m.ino() || fm.dev() != m.dev() {
-                            return Err(error("Snapshot file changed", "快照文件变化"));
+                            return Err(Error::SnapshotFileChanged);
                         }
                         let mut b = Vec::new();
                         f.by_ref().take(*budget + 1).read_to_end(&mut b)?;
                         b
                     } else {
-                        return Err(error("Special file in snapshot", "快照中存在特殊文件"));
+                        return Err(Error::SpecialFileInSnapshot);
                     };
-                    *budget = budget.checked_sub(bytes.len() as u64).ok_or_else(|| {
-                        error("Snapshot byte budget exceeded", "快照字节超出预算")
-                    })?;
+                    *budget = budget
+                        .checked_sub(bytes.len() as u64)
+                        .ok_or_else(|| Error::SnapshotByteBudget)?;
                     add(&mut h, &bytes);
                 }
             }
@@ -283,7 +271,7 @@ impl Repo {
             || status != self.status()?
             || start.elapsed() > Duration::from_secs(5)
         {
-            return Err(error("Unstable snapshot", "快照不稳定"));
+            return Err(Error::UnstableSnapshot);
         }
         Ok(h.finalize().to_hex().to_string())
     }
@@ -300,7 +288,7 @@ pub fn safe_path(root: &Path, bytes: &[u8]) -> Result<PathBuf> {
         .any(|c| !matches!(c, std::path::Component::Normal(_)))
         || rel.as_os_str().is_empty()
     {
-        return Err(error("Unsafe relative path", "相对路径不安全"));
+        return Err(Error::UnsafeRelativePath);
     }
     let path = root.join(rel);
     let mut parent = path.parent();
@@ -309,7 +297,7 @@ pub fn safe_path(root: &Path, bytes: &[u8]) -> Result<PathBuf> {
             break;
         }
         if fs::symlink_metadata(p)?.file_type().is_symlink() {
-            return Err(error("Symlinked parent", "父目录为符号链接"));
+            return Err(Error::SymlinkedParent);
         }
         parent = p.parent();
     }
@@ -324,7 +312,7 @@ pub fn workspace(cwd: &Path) -> (PathBuf, Option<Repo>) {
 pub fn fingerprint(path: &Path) -> Result<String> {
     let m = fs::symlink_metadata(path)?;
     if !m.is_file() || m.file_type().is_symlink() || m.nlink() != 1 {
-        return Err(error("Not an independent regular file", "不是独立普通文件"));
+        return Err(Error::NotIndependentFile);
     }
     let mut file = std::fs::OpenOptions::new()
         .read(true)
@@ -336,14 +324,14 @@ pub fn fingerprint(path: &Path) -> Result<String> {
         || opened.ino() != m.ino()
         || opened.dev() != m.dev()
     {
-        return Err(error("File changed while opening", "文件在打开期间变化"));
+        return Err(Error::FileChangedWhileOpening);
     }
     let mut bytes = Vec::new();
     file.by_ref()
         .take(256 * 1024 * 1024 + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() > 256 * 1024 * 1024 {
-        return Err(error("File hash budget exceeded", "文件指纹超出预算"));
+        return Err(Error::FileHashBudget);
     }
     Ok(digest(&bytes))
 }

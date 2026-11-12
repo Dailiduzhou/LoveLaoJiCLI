@@ -1,10 +1,11 @@
 //! Session-card schema and Git capture. The caller owns the workspace lock.
 mod display;
 
+use crate::error::{Error, Result};
 use cli_common::{
-    display, error, git,
+    display, git,
     state::{self, Store},
-    Language, Result,
+    Language,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -35,7 +36,7 @@ impl Card {
             || self.workspace != state::path_bytes(workspace)
             || cli_common::text_input(&self.next_action, 2000).is_none()
         {
-            return Err(error("Invalid session card", "上下文卡片无效"));
+            return Err(Error::InvalidCard);
         }
         Ok(())
     }
@@ -51,7 +52,7 @@ impl Card {
             schema_version: 1,
             record_id: state::id(),
             created_at: state::now(),
-            workspace_id: dir.file_name().unwrap().to_string_lossy().into_owned(),
+            workspace_id: state::workspace_id(dir),
             tool: "later".into(),
             workspace: state::path_bytes(workspace),
             repository: None,
@@ -66,32 +67,35 @@ impl Card {
             last_failure: None,
         };
         if let Some(repo) = repo {
-            match collect(repo, &mut card) {
-                Ok(()) => (),
-                Err(e) => {
-                    eprintln!(
-                        "{}: {}",
-                        l.text("Git context unavailable", "Git 上下文不可用"),
-                        display(e.to_string())
-                    );
-                    card.repository = None;
-                    card.branch = None;
-                    card.head = None;
-                    card.files.clear();
-                    card.file_count = 0;
-                    card.truncated = false;
-                    card.diff_stat = None;
-                    card.latest_commit = None;
-                }
+            if let Err(e) = collect(repo, &mut card) {
+                eprintln!(
+                    "{}: {}",
+                    l.text("Git context unavailable", "Git 上下文不可用"),
+                    display(e.to_string())
+                );
+                card.clear_git();
             }
         }
         card
     }
 
+    /// A failed capture leaves every Git field unknown rather than half filled.
+    fn clear_git(&mut self) {
+        self.repository = None;
+        self.branch = None;
+        self.head = None;
+        self.files.clear();
+        self.file_count = 0;
+        self.truncated = false;
+        self.diff_stat = None;
+        self.latest_commit = None;
+    }
+
     /// Caller must hold the workspace lock through failure lookup and writing.
     pub(super) fn save(&mut self, store: &Store, dir: &Path, path: &Path) -> Result<()> {
         self.last_failure = cli_common::repeat::latest_failure(store, dir)?;
-        store.write(path, self)
+        store.write(path, self)?;
+        Ok(())
     }
 }
 
@@ -100,16 +104,14 @@ fn collect(repo: &git::Repo, card: &mut Card) -> Result<()> {
     let mut parts = bytes.split(|b| *b == 0).filter(|b| !b.is_empty());
     while let Some(entry) = parts.next() {
         if entry.len() < 4 {
-            return Err(error("Invalid Git status", "Git 状态无效"));
+            return Err(Error::InvalidGitStatus);
         }
         card.file_count += 1;
         if card.files.len() < 200 {
             card.files.push(entry.to_vec());
         }
         if entry[..2].contains(&b'R') || entry[..2].contains(&b'C') {
-            let _ = parts
-                .next()
-                .ok_or_else(|| error("Incomplete Git rename", "Git 重命名信息不完整"))?;
+            let _ = parts.next().ok_or_else(|| Error::IncompleteRename)?;
         }
     }
     card.truncated = card.file_count > card.files.len();

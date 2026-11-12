@@ -132,7 +132,7 @@ pub(crate) fn read_line(question: &str, max: usize) -> Result<Option<String>> {
         match poll(&mut fds, Some(&TICK)) {
             Ok(0) | Err(rustix::io::Errno::INTR) => continue,
             Ok(_) => {}
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(io::Error::from(e).into()),
         }
         let mut byte = [0u8; 1];
         match input.read(&mut byte) {
@@ -159,7 +159,7 @@ pub(crate) fn read_line(question: &str, max: usize) -> Result<Option<String>> {
                     e.kind(),
                     io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
                 ) => {}
-            Err(e) => return Err(e),
+            Err(e) => return Err(e.into()),
         }
     }
 }

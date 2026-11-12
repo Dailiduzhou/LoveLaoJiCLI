@@ -1,23 +1,19 @@
 //! Manual PTY driver for the current real chain; not an installed CLI.
 
-use cli_common::{display, Language};
-use encourage::{duration::PlaybackDuration, pipeline, tui};
+use cli_common::{report_error, Language};
+use encourage::{duration::PlaybackDuration, error::Result, pipeline, tui};
 use std::io::{self, Write};
 
 fn main() {
     if let Err(error) = run() {
-        let _ = writeln!(
-            io::stderr().lock(),
-            "encourage-replay: {}",
-            display(error.to_string())
-        );
+        report_error("encourage-replay", &error);
         std::process::exit(1);
     }
 }
 
-fn run() -> cli_common::Result<()> {
+fn run() -> Result<()> {
     let language = Language::detect();
-    let generation = pipeline::generate(0, language).map_err(io::Error::other)?;
+    let generation = pipeline::generate(0, language)?;
     match tui::run(&generation, language, PlaybackDuration::default())? {
         tui::Outcome::Plain | tui::Outcome::Confirmed => {
             writeln!(io::stdout().lock(), "{}", generation.sentence)?;

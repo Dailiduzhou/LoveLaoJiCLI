@@ -1,6 +1,7 @@
 //! Persistent task schema, validation, and selection.
-use cli_common::{error, state, text_input, Result};
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use crate::error::{Error, Result};
+use cli_common::{state, text_input};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -33,10 +34,7 @@ impl Tasks {
     /// Add a CLI-validated task without replacing the current selection.
     pub(super) fn add(&mut self, text: String) -> Result<()> {
         if self.tasks.len() >= MAX_TASKS {
-            return Err(error(
-                "Task limit reached (1000)",
-                "任务数量已达上限（1000）",
-            ));
+            return Err(Error::TaskLimit);
         }
         let mut id = state::id();
         while self.tasks.iter().any(|t| t.id == id) {
@@ -88,23 +86,13 @@ impl Tasks {
                 .as_ref()
                 .is_some_and(|id| !ids.contains(id))
         {
-            return Err(error(
-                "Invalid task record; nothing changed",
-                "任务记录无效；未作更改",
-            ));
+            return Err(Error::InvalidRecord);
         }
         Ok(())
     }
 }
 pub(super) fn choose(len: usize) -> usize {
-    let mut rng = match std::env::var("ONE_SEED")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-    {
-        Some(seed) => StdRng::seed_from_u64(seed),
-        None => StdRng::from_entropy(),
-    };
-    rng.gen_range(0..len)
+    cli_common::seeded_rng("ONE_SEED").gen_range(0..len)
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 //! These are short word/grammar rules, not complete replacement sentences.
 use crate::corpus::{self, Atom, Frame, Mark};
 use crate::rng::{Budgeted, SplitMix64};
-use crate::{Error, Language, Limits};
+use crate::{GenerationError, Language, Limits};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Site {
@@ -136,13 +136,19 @@ pub fn rule(language: Language, frame_index: usize) -> &'static Rule {
     }
 }
 
-pub fn validate(frame: &Frame, index: usize) -> Result<(), Error> {
+pub fn validate(frame: &Frame, index: usize) -> Result<(), GenerationError> {
     let rule = rule(frame.language, index);
     if rule.id != frame.id {
-        return Err(Error::InvalidCorpus("revision frame mismatch"));
+        return Err(GenerationError::InvalidCorpus("revision frame mismatch"));
     }
     let anchor = match rule.site {
-        Fixed(slot) => frame.slots.get(slot).ok_or(Error::InvalidSelection)?.before,
+        Fixed(slot) => {
+            frame
+                .slots
+                .get(slot)
+                .ok_or(GenerationError::InvalidSelection)?
+                .before
+        }
         Suffix => frame.suffix,
     };
     if anchor
@@ -151,12 +157,14 @@ pub fn validate(frame: &Frame, index: usize) -> Result<(), Error> {
         .count()
         != 1
     {
-        return Err(Error::InvalidCorpus(
+        return Err(GenerationError::InvalidCorpus(
             "revision anchor must occur exactly once",
         ));
     }
     if rule.insert.is_empty() || !rule.insert.iter().any(|a| matches!(a, W(_))) {
-        return Err(Error::InvalidCorpus("revision must insert real words"));
+        return Err(GenerationError::InvalidCorpus(
+            "revision must insert real words",
+        ));
     }
     for &atom in rule.insert {
         match atom {
@@ -171,12 +179,14 @@ pub fn validate(frame: &Frame, index: usize) -> Result<(), Error> {
                     }
                 };
                 if !safe || word == rule.remove {
-                    return Err(Error::InvalidCorpus("unsafe or ineffective revision"));
+                    return Err(GenerationError::InvalidCorpus(
+                        "unsafe or ineffective revision",
+                    ));
                 }
             }
             P(Mark::Comma | Mark::Semicolon) => {}
             _ => {
-                return Err(Error::InvalidCorpus(
+                return Err(GenerationError::InvalidCorpus(
                     "revision cannot introduce an end boundary",
                 ))
             }
@@ -191,12 +201,12 @@ pub fn render_choices(
     frame_index: usize,
     language: Language,
     choices: &[usize],
-) -> Result<String, Error> {
+) -> Result<String, GenerationError> {
     let frame = &corpus::frames(language)[frame_index];
     corpus::validate(frame)?;
     validate(frame, frame_index)?;
     if choices.len() != frame.slots.len() {
-        return Err(Error::InvalidSelection);
+        return Err(GenerationError::InvalidSelection);
     }
     let rule = rule(language, frame_index);
     let mut original = Vec::new();
@@ -204,7 +214,11 @@ pub fn render_choices(
         for &atom in slot.before {
             original.push((Some(Fixed(ordinal)), atom));
         }
-        for &atom in *slot.variants.get(index).ok_or(Error::InvalidSelection)? {
+        for &atom in *slot
+            .variants
+            .get(index)
+            .ok_or(GenerationError::InvalidSelection)?
+        {
             original.push((None, atom));
         }
     }
@@ -222,7 +236,7 @@ pub fn render_choices(
         }
     }
     if replaced != 1 {
-        return Err(Error::InvalidSelection);
+        return Err(GenerationError::InvalidSelection);
     }
     let mut text = String::new();
     let mut first_word = true;
@@ -237,7 +251,7 @@ pub fn render_choices(
                     text.push(
                         letters
                             .next()
-                            .ok_or(Error::InvalidSelection)?
+                            .ok_or(GenerationError::InvalidSelection)?
                             .to_ascii_uppercase(),
                     );
                     text.extend(letters);
@@ -253,7 +267,7 @@ pub fn render_choices(
     Ok(text)
 }
 
-pub fn reference(seed: u64, language: Language) -> Result<(usize, String, usize), Error> {
+pub fn reference(seed: u64, language: Language) -> Result<(usize, String, usize), GenerationError> {
     let mut rng = Budgeted::new(SplitMix64::new(seed), Limits::default().draws);
     let index = rng.choose(4)? * 2 + rng.choose(2)?;
     let mut choices = Vec::new();

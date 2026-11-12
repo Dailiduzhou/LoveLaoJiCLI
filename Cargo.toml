@@ -42,3 +42,4 @@ ratatui = { version = "0.30.2", default-features = false, features = [
 ] }
 signal-hook = { version = "0.3.18", default-features = false }
 libc = "0.2"
+thiserror = "2"

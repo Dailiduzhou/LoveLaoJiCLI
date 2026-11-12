@@ -1,8 +1,7 @@
+use crate::error::{Error, Result};
 use cli_common::{
-    error,
     git::{self, Repo},
     local_time::LocalDay,
-    Result,
 };
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
@@ -15,11 +14,8 @@ pub struct Totals {
     pub paths: HashSet<Vec<u8>>,
     pub binary_paths: HashSet<Vec<u8>>,
 }
-fn invalid() -> std::io::Error {
-    error(
-        "Git evidence is invalid or exceeds its budget",
-        "Git 证据无效或超出预算",
-    )
+fn invalid() -> Error {
+    Error::InvalidEvidence
 }
 fn identity(repo: &Repo, field: &str) -> Result<Vec<u8>> {
     let mut value = git::run(&repo.root, ["config", "--null", "--get", field])?;
@@ -38,7 +34,7 @@ fn identity(repo: &Repo, field: &str) -> Result<Vec<u8>> {
 fn check_local_attributes(repo: &Repo) -> Result<()> {
     match std::fs::symlink_metadata(repo.common.join("info/attributes")) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
         Ok(_) => Err(invalid()),
     }
 }

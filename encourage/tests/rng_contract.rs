@@ -1,5 +1,5 @@
 use encourage::rng::{accepted_index, encode_argv, seed_from_argv, Attempts, Budgeted, SplitMix64};
-use encourage::Error;
+use encourage::GenerationError;
 
 #[test]
 fn splitmix64_known_vectors_and_wraparound() {
@@ -47,7 +47,7 @@ fn argv_encoding_is_length_prefixed_utf8_without_normalization() {
         // Specific regression vectors, not a claim of collision freedom.
         assert_ne!(seed_from_argv(&a).unwrap(), seed_from_argv(&b).unwrap());
     }
-    assert_eq!(encode_argv(&[]), Err(Error::NoExplicitArguments));
+    assert_eq!(encode_argv(&[]), Err(GenerationError::NoExplicitArguments));
     assert!(seed_from_argv(&[""]).is_ok());
 }
 
@@ -72,23 +72,23 @@ fn rejection_and_singleton_draw_contract() {
     assert_eq!(accepted_index(u64::MAX, 3).unwrap(), Some(0));
     assert_eq!(accepted_index(0, 2).unwrap(), Some(0));
     assert_eq!(accepted_index(0, 1).unwrap(), Some(0));
-    assert_eq!(accepted_index(0, 0), Err(Error::EmptyCandidates));
+    assert_eq!(accepted_index(0, 0), Err(GenerationError::EmptyCandidates));
     let mut rng = Budgeted::new([0, 1, 99].into_iter(), 3);
     assert_eq!(rng.choose(3), Ok(1));
     assert_eq!(rng.used, 2);
     assert_eq!(rng.choose(1), Ok(0));
     assert_eq!(rng.used, 3);
-    assert_eq!(rng.word(), Err(Error::DrawBudget));
+    assert_eq!(rng.word(), Err(GenerationError::DrawBudget));
 }
 
 #[test]
 fn zero_bound_does_not_consume_a_word() {
     let mut rng = Budgeted::new([8].into_iter(), 10);
-    assert_eq!(rng.choose(0), Err(Error::EmptyCandidates));
+    assert_eq!(rng.choose(0), Err(GenerationError::EmptyCandidates));
     assert_eq!(rng.used, 0);
     assert_eq!(
         Attempts::new(&mut rng, &[0]).next(),
-        Some(Err(Error::EmptyCandidates))
+        Some(Err(GenerationError::EmptyCandidates))
     );
     assert_eq!(rng.used, 0);
 }
@@ -135,8 +135,8 @@ fn rejection_does_not_advance_slots_and_end_does_not_overdraw() {
 #[test]
 fn bounded_failure_is_an_error_not_a_fallback() {
     let mut budget = Budgeted::new(std::iter::repeat(0), 7);
-    assert_eq!(budget.choose(3), Err(Error::DrawBudget));
+    assert_eq!(budget.choose(3), Err(GenerationError::DrawBudget));
     assert_eq!(budget.used, 7);
     let mut ended = Budgeted::new([0].into_iter(), 7);
-    assert_eq!(ended.choose(3), Err(Error::RandomSourceEnded));
+    assert_eq!(ended.choose(3), Err(GenerationError::RandomSourceEnded));
 }

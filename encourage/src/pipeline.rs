@@ -7,7 +7,7 @@ use crate::corpus::{self, Atom, Frame, Slot};
 use crate::material::Assembly;
 use crate::revision::{self, Rule, Site};
 use crate::rng::{accepted_index, Budgeted, SplitMix64};
-use crate::{Error, Language, Limits};
+use crate::{GenerationError, Language, Limits};
 use std::cell::{Cell, RefCell};
 
 #[cfg(test)]
@@ -263,7 +263,10 @@ struct Pending {
 }
 
 impl Pending {
-    fn push(&mut self, row: Result<Row, Error>) -> Option<Result<Group, Error>> {
+    fn push(
+        &mut self,
+        row: Result<Row, GenerationError>,
+    ) -> Option<Result<Group, GenerationError>> {
         let row = match row {
             Ok(row) => row,
             Err(error) => {
@@ -273,12 +276,12 @@ impl Pending {
         };
         if self.ordinal.is_some_and(|ordinal| ordinal != row.ordinal) {
             *self = Self::default();
-            return Some(Err(Error::InvalidSelection));
+            return Some(Err(GenerationError::InvalidSelection));
         }
         if let Some(candidate) = row.candidate {
             if candidate.owner != row.ordinal || candidate.rank != self.candidates.len() {
                 *self = Self::default();
-                return Some(Err(Error::InvalidSelection));
+                return Some(Err(GenerationError::InvalidSelection));
             }
             self.ordinal = Some(row.ordinal);
             self.candidates.push(candidate.words);
@@ -287,10 +290,10 @@ impl Pending {
             self.ordinal = None;
             let candidates = std::mem::take(&mut self.candidates);
             if candidates.is_empty() {
-                return Some(Err(Error::EmptyCandidates));
+                return Some(Err(GenerationError::EmptyCandidates));
             }
             if candidates.len() != row.request.slot.variants.len() {
-                return Some(Err(Error::InvalidSelection));
+                return Some(Err(GenerationError::InvalidSelection));
             }
             Some(Ok(Group {
                 request: row.request,
@@ -381,7 +384,12 @@ fn observe_atoms(
     });
 }
 
-fn observe_row(trace: &RefCell<Trace>, stage: u16, row: &Result<Row, Error>, language: Language) {
+fn observe_row(
+    trace: &RefCell<Trace>,
+    stage: u16,
+    row: &Result<Row, GenerationError>,
+    language: Language,
+) {
     if let Ok(Row {
         candidate: Some(candidate),
         ..
@@ -400,7 +408,7 @@ fn observe_row(trace: &RefCell<Trace>, stage: u16, row: &Result<Row, Error>, lan
 fn observe_group(
     trace: &RefCell<Trace>,
     stage: u16,
-    group: &Result<Group, Error>,
+    group: &Result<Group, GenerationError>,
     language: Language,
 ) {
     if let Ok(group) = group {
@@ -420,7 +428,7 @@ fn observe_group(
 fn observe_fragment(
     trace: &RefCell<Trace>,
     stage: u16,
-    fragment: &Result<Fragment, Error>,
+    fragment: &Result<Fragment, GenerationError>,
     language: Language,
 ) {
     if let Ok(fragment) = fragment {
@@ -437,7 +445,7 @@ fn observe_fragment(
 fn observe_node(
     trace: &RefCell<Trace>,
     stage: u16,
-    node: &Result<Node, Error>,
+    node: &Result<Node, GenerationError>,
     language: Language,
 ) {
     if let Ok(node) = node {
@@ -448,7 +456,7 @@ fn observe_node(
 fn observe_text(
     trace: &RefCell<Trace>,
     stage: u16,
-    atom: &Result<TextAtom, Error>,
+    atom: &Result<TextAtom, GenerationError>,
     assembly: Assembly,
 ) {
     if let Ok(atom) = atom {
@@ -458,7 +466,7 @@ fn observe_text(
     }
 }
 
-fn read_word<I: Iterator<Item = u64>>(rng: &RefCell<Budgeted<I>>) -> Result<Word, Error> {
+fn read_word<I: Iterator<Item = u64>>(rng: &RefCell<Budgeted<I>>) -> Result<Word, GenerationError> {
     let mut rng = rng.borrow_mut();
     let value = rng.word()?;
     Ok(Word {
@@ -469,12 +477,12 @@ fn read_word<I: Iterator<Item = u64>>(rng: &RefCell<Budgeted<I>>) -> Result<Word
 
 /// Retry consumes words for THIS group, never another item from the slot stream.
 fn choose<I: Iterator<Item = u64>>(
-    first: Result<Word, Error>,
+    first: Result<Word, GenerationError>,
     bound: usize,
     rng: &RefCell<Budgeted<I>>,
     trace: &RefCell<Trace>,
     stage: &'static str,
-) -> Result<(usize, usize), Error> {
+) -> Result<(usize, usize), GenerationError> {
     let mut word = first?;
     loop {
         let index = accepted_index(word.value, bound)?;
@@ -494,7 +502,7 @@ fn choose<I: Iterator<Item = u64>>(
     }
 }
 
-fn catalogues(choice: Result<Choice, Error>) -> Vec<Result<Catalogue, Error>> {
+fn catalogues(choice: Result<Choice, GenerationError>) -> Vec<Result<Catalogue, GenerationError>> {
     match choice {
         Ok(choice) => [Language::Chinese, Language::English]
             .into_iter()
@@ -504,7 +512,7 @@ fn catalogues(choice: Result<Choice, Error>) -> Vec<Result<Catalogue, Error>> {
     }
 }
 
-fn themes(catalogue: Result<Catalogue, Error>) -> Vec<Result<ThemeRow, Error>> {
+fn themes(catalogue: Result<Catalogue, GenerationError>) -> Vec<Result<ThemeRow, GenerationError>> {
     match catalogue {
         Ok(catalogue) => (0..4)
             .map(|theme| Ok(ThemeRow { catalogue, theme }))
@@ -513,7 +521,7 @@ fn themes(catalogue: Result<Catalogue, Error>) -> Vec<Result<ThemeRow, Error>> {
     }
 }
 
-fn frames(theme: Result<ThemeRow, Error>) -> Vec<Result<FrameRow, Error>> {
+fn frames(theme: Result<ThemeRow, GenerationError>) -> Vec<Result<FrameRow, GenerationError>> {
     match theme {
         Ok(theme) => (0..2)
             .map(|structure| {
@@ -531,7 +539,9 @@ fn frames(theme: Result<ThemeRow, Error>) -> Vec<Result<FrameRow, Error>> {
 
 /// A frame-local bank contains real alternatives for BOTH slots, not fabricated
 /// noise. Ownership filtering below must retain the correct role before drawing.
-fn candidate_rows((ordinal, request): (usize, Result<Request, Error>)) -> Vec<Result<Row, Error>> {
+fn candidate_rows(
+    (ordinal, request): (usize, Result<Request, GenerationError>),
+) -> Vec<Result<Row, GenerationError>> {
     match request {
         Err(error) => vec![Err(error)],
         Ok(request) => {
@@ -555,7 +565,9 @@ fn candidate_rows((ordinal, request): (usize, Result<Request, Error>)) -> Vec<Re
     }
 }
 
-fn fragments(selected: Result<Selected, Error>) -> Vec<Result<Fragment, Error>> {
+fn fragments(
+    selected: Result<Selected, GenerationError>,
+) -> Vec<Result<Fragment, GenerationError>> {
     match selected {
         Err(error) => vec![Err(error)],
         Ok(selected) => vec![
@@ -576,7 +588,9 @@ fn fragments(selected: Result<Selected, Error>) -> Vec<Result<Fragment, Error>> 
     }
 }
 
-fn shuffle_fragment(fragment: Result<Fragment, Error>) -> Result<Shuffled, Error> {
+fn shuffle_fragment(
+    fragment: Result<Fragment, GenerationError>,
+) -> Result<Shuffled, GenerationError> {
     let fragment = fragment?;
     let mut items: Vec<_> = fragment.atoms.iter().copied().enumerate().collect();
     let mut local = Budgeted::new(SplitMix64::new(SHUFFLE_SEED), 4096);
@@ -591,10 +605,12 @@ fn shuffle_fragment(fragment: Result<Fragment, Error>) -> Result<Shuffled, Error
     })
 }
 
-fn restore_fragment(shuffled: Result<Shuffled, Error>) -> Result<Restored, Error> {
+fn restore_fragment(
+    shuffled: Result<Shuffled, GenerationError>,
+) -> Result<Restored, GenerationError> {
     let mut shuffled = shuffled?;
     if shuffled.seed != SHUFFLE_SEED {
-        return Err(Error::InvalidSelection);
+        return Err(GenerationError::InvalidSelection);
     }
     shuffled
         .items
@@ -605,7 +621,7 @@ fn restore_fragment(shuffled: Result<Shuffled, Error>) -> Result<Restored, Error
     })
 }
 
-fn atoms(fragment: Result<Restored, Error>) -> Vec<Result<Node, Error>> {
+fn atoms(fragment: Result<Restored, GenerationError>) -> Vec<Result<Node, GenerationError>> {
     match fragment {
         Err(error) => vec![Err(error)],
         Ok(fragment) => fragment
@@ -622,16 +638,16 @@ fn atoms(fragment: Result<Restored, Error>) -> Vec<Result<Node, Error>> {
 }
 
 fn insert_words(
-    node: Result<Node, Error>,
+    node: Result<Node, GenerationError>,
     rule: Option<&Rule>,
     insertions: &Cell<usize>,
-) -> Vec<Result<Node, Error>> {
+) -> Vec<Result<Node, GenerationError>> {
     let node = match node {
         Ok(node) => node,
         Err(error) => return vec![Err(error)],
     };
     let Some(rule) = rule else {
-        return vec![Err(Error::InvalidSelection)];
+        return vec![Err(GenerationError::InvalidSelection)];
     };
     let mut output = Vec::new();
     if rule.matches(node.origin.site(), node.atom) {
@@ -651,7 +667,7 @@ fn insert_words(
     output
 }
 
-fn text_pieces(spaced: Result<Spaced, Error>) -> Vec<Result<TextAtom, Error>> {
+fn text_pieces(spaced: Result<Spaced, GenerationError>) -> Vec<Result<TextAtom, GenerationError>> {
     match spaced {
         Err(error) => vec![Err(error)],
         Ok(spaced) => {
@@ -669,7 +685,7 @@ fn text_pieces(spaced: Result<Spaced, Error>) -> Vec<Result<TextAtom, Error>> {
     }
 }
 
-pub fn generate(seed: u64, language: Language) -> Result<Generation, Error> {
+pub fn generate(seed: u64, language: Language) -> Result<Generation, GenerationError> {
     let output = generate_words(
         SplitMix64::new(seed),
         language,
@@ -686,7 +702,7 @@ pub fn generate(seed: u64, language: Language) -> Result<Generation, Error> {
     })
 }
 
-pub fn generate_plain(seed: u64, language: Language) -> Result<String, Error> {
+pub fn generate_plain(seed: u64, language: Language) -> Result<String, GenerationError> {
     generate_words(
         SplitMix64::new(seed),
         language,
@@ -705,7 +721,7 @@ fn generate_words<I: Iterator<Item = u64>>(
     language: Language,
     config: TraceConfig,
     limits: Limits,
-) -> Result<CollectedGeneration, Error> {
+) -> Result<CollectedGeneration, GenerationError> {
     let rng = RefCell::new(Budgeted::new(words, limits.draws));
     let trace = RefCell::new(Trace::new(config));
     let chosen_frame = Cell::new(None::<FrameRow>);
@@ -762,7 +778,7 @@ fn generate_words<I: Iterator<Item = u64>>(
             keep
         })
         // op09: flat_map
-        .flat_map(|frame: Result<FrameRow, Error>| match frame {
+        .flat_map(|frame: Result<FrameRow, GenerationError>| match frame {
             Err(error) => vec![Err(error)],
             Ok(row) => {
                 if let Err(error) = corpus::validate(row.frame)
@@ -840,7 +856,7 @@ fn generate_words<I: Iterator<Item = u64>>(
         .map(|(group, word)| {
             let group = group?;
             if group.ordinal != selected_slots.get() {
-                return Err(Error::InvalidSelection);
+                return Err(GenerationError::InvalidSelection);
             }
             let (index, draw) = choose(word, group.candidates.len(), &rng, &trace, "16.choice")?;
             let words = group.candidates[index];
@@ -872,7 +888,7 @@ fn generate_words<I: Iterator<Item = u64>>(
                     atoms: row.frame.suffix,
                     origin: Origin::Suffix,
                 })
-                .ok_or(Error::MissingEnd)
+                .ok_or(GenerationError::MissingEnd)
         }))
         .inspect(|fragment| {
             record(&trace, "18.with_suffix", || format!("{fragment:?}"));
@@ -992,13 +1008,13 @@ fn generate_words<I: Iterator<Item = u64>>(
         // op30: map
         .map(|(position, node)| {
             if position >= limits.atoms {
-                return Err(Error::AtomBudget);
+                return Err(GenerationError::AtomBudget);
             }
             let Node { atom, origin } = node?;
             let (text, is_word) = match atom {
                 Atom::Word(word) => (word.to_owned(), true),
                 Atom::Punctuation(mark) => (corpus::punctuation(mark, language).to_owned(), false),
-                Atom::End => return Err(Error::InvalidSelection),
+                Atom::End => return Err(GenerationError::InvalidSelection),
             };
             Ok(TextAtom {
                 text,
@@ -1059,7 +1075,7 @@ fn generate_words<I: Iterator<Item = u64>>(
             let mut sentence = result?;
             let atom = atom?;
             if sentence.len() + atom.text.len() > limits.bytes {
-                return Err(Error::ByteBudget);
+                return Err(GenerationError::ByteBudget);
             }
             sentence.push_str(&atom.text);
             record(&trace, "34.accumulated", || sentence.clone());
@@ -1071,15 +1087,17 @@ fn generate_words<I: Iterator<Item = u64>>(
     // encourage:display:end
 
     let sentence = sentence?;
-    let frame = chosen_frame.get().ok_or(Error::InvalidSelection)?;
+    let frame = chosen_frame
+        .get()
+        .ok_or(GenerationError::InvalidSelection)?;
     if selected_slots.get() != frame.frame.slots.len() {
-        return Err(Error::InvalidSelection);
+        return Err(GenerationError::InvalidSelection);
     }
     if !saw_end.get() {
-        return Err(Error::MissingEnd);
+        return Err(GenerationError::MissingEnd);
     }
     if insertions.get() != 1 || deletions.get() != 1 {
-        return Err(Error::InvalidSelection);
+        return Err(GenerationError::InvalidSelection);
     }
     let draws = rng.borrow().used;
     Ok(CollectedGeneration {
@@ -1093,18 +1111,22 @@ fn generate_words<I: Iterator<Item = u64>>(
 /// Convert the collector's actual labelled observations into bounded replay
 /// stages. Missing structured counts/provenance stay unknown rather than being
 /// inferred from preview indices or by assuming input and output counts match.
-fn replay_trace(mut trace: Trace, language: Language) -> Result<crate::trace::Trace, Error> {
+fn replay_trace(
+    mut trace: Trace,
+    language: Language,
+) -> Result<crate::trace::Trace, GenerationError> {
     use crate::source::Source;
     use crate::trace::{OperationKind, Stage, StageId, StageRole, ValuePreview};
 
-    let source = Source::embedded().map_err(|_| Error::InvalidSelection)?;
+    let source = Source::embedded().map_err(|_| GenerationError::InvalidSelection)?;
     let mut stages = Vec::with_capacity(OPERATIONS.len());
     for (index, (operation_name, _)) in OPERATIONS.iter().enumerate() {
         let number = index + 1;
-        let raw_id = u16::try_from(number).map_err(|_| Error::InvalidSelection)?;
+        let raw_id = u16::try_from(number).map_err(|_| GenerationError::InvalidSelection)?;
         let id = StageId(raw_id);
-        let operation = OperationKind::from_name(operation_name).ok_or(Error::InvalidSelection)?;
-        let range = source.range(id).ok_or(Error::InvalidSelection)?;
+        let operation =
+            OperationKind::from_name(operation_name).ok_or(GenerationError::InvalidSelection)?;
+        let range = source.range(id).ok_or(GenerationError::InvalidSelection)?;
         let role = source.role(id).unwrap_or(StageRole::Content);
         let value_type = VALUE_TYPES.get(index).copied().unwrap_or("observed value");
         let mut stage = Stage::new(raw_id, operation, range, value_type).with_role(role);
@@ -1217,12 +1239,12 @@ mod transition_tests {
     #[test]
     fn shuffle_and_restore_do_not_swallow_errors() {
         assert_eq!(
-            shuffle_fragment(Err(Error::DrawBudget)).unwrap_err(),
-            Error::DrawBudget
+            shuffle_fragment(Err(GenerationError::DrawBudget)).unwrap_err(),
+            GenerationError::DrawBudget
         );
         assert_eq!(
-            restore_fragment(Err(Error::RandomSourceEnded)).unwrap_err(),
-            Error::RandomSourceEnded
+            restore_fragment(Err(GenerationError::RandomSourceEnded)).unwrap_err(),
+            GenerationError::RandomSourceEnded
         );
     }
 }

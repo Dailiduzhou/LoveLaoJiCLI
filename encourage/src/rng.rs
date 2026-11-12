@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::GenerationError;
 use rand::RngCore;
 use std::io;
 
@@ -27,9 +27,9 @@ fn seed_with_entropy(
 #[cfg(test)]
 mod tests;
 
-pub fn encode_argv(args: &[&str]) -> Result<Vec<u8>, Error> {
+pub fn encode_argv(args: &[&str]) -> Result<Vec<u8>, GenerationError> {
     if args.is_empty() {
-        return Err(Error::NoExplicitArguments);
+        return Err(GenerationError::NoExplicitArguments);
     }
     let mut bytes = b"encourage/argv/v1\0".to_vec();
     bytes.extend_from_slice(&(args.len() as u64).to_le_bytes());
@@ -40,7 +40,7 @@ pub fn encode_argv(args: &[&str]) -> Result<Vec<u8>, Error> {
     Ok(bytes)
 }
 
-pub fn seed_from_argv(args: &[&str]) -> Result<u64, Error> {
+pub fn seed_from_argv(args: &[&str]) -> Result<u64, GenerationError> {
     let mut key = [0_u8; 32];
     let domain = b"encourage/argv-seed/v1";
     key[..domain.len()].copy_from_slice(domain);
@@ -88,16 +88,19 @@ impl<I: Iterator<Item = u64>> Budgeted<I> {
         }
     }
 
-    pub fn word(&mut self) -> Result<u64, Error> {
+    pub fn word(&mut self) -> Result<u64, GenerationError> {
         if self.used >= self.limit {
-            return Err(Error::DrawBudget);
+            return Err(GenerationError::DrawBudget);
         }
-        let value = self.source.next().ok_or(Error::RandomSourceEnded)?;
+        let value = self
+            .source
+            .next()
+            .ok_or(GenerationError::RandomSourceEnded)?;
         self.used += 1;
         Ok(value)
     }
 
-    pub fn choose(&mut self, bound: usize) -> Result<usize, Error> {
+    pub fn choose(&mut self, bound: usize) -> Result<usize, GenerationError> {
         loop {
             if let Some(index) = accepted_index(self.word_after_check(bound)?, bound)? {
                 return Ok(index);
@@ -105,18 +108,18 @@ impl<I: Iterator<Item = u64>> Budgeted<I> {
         }
     }
 
-    fn word_after_check(&mut self, bound: usize) -> Result<u64, Error> {
+    fn word_after_check(&mut self, bound: usize) -> Result<u64, GenerationError> {
         if bound == 0 {
-            return Err(Error::EmptyCandidates);
+            return Err(GenerationError::EmptyCandidates);
         }
         self.word()
     }
 }
 
 /// None means rejection, not an absent grammar slot. Check BEFORE modulo.
-pub fn accepted_index(word: u64, bound: usize) -> Result<Option<usize>, Error> {
+pub fn accepted_index(word: u64, bound: usize) -> Result<Option<usize>, GenerationError> {
     if bound == 0 {
-        return Err(Error::EmptyCandidates);
+        return Err(GenerationError::EmptyCandidates);
     }
     let n = bound as u64;
     let threshold = n.wrapping_neg() % n;
@@ -154,7 +157,7 @@ impl<'a, I> Attempts<'a, I> {
 }
 
 impl<I: Iterator<Item = u64>> Iterator for Attempts<'_, I> {
-    type Item = Result<Attempt, Error>;
+    type Item = Result<Attempt, GenerationError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.failed || self.slot == self.bounds.len() {
@@ -163,7 +166,7 @@ impl<I: Iterator<Item = u64>> Iterator for Attempts<'_, I> {
         let bound = self.bounds[self.slot];
         let result = (|| {
             if bound == 0 {
-                return Err(Error::EmptyCandidates);
+                return Err(GenerationError::EmptyCandidates);
             }
             let word = self.rng.word()?;
             Ok(Attempt {

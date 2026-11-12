@@ -4,7 +4,7 @@ use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 impl super::Card {
-    pub(crate) fn show(&self, repo: Option<&git::Repo>, l: Language) -> cli_common::Result<()> {
+    pub(crate) fn show(&self, repo: Option<&git::Repo>, l: Language) -> crate::error::Result<()> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .ok()

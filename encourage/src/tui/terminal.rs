@@ -1,6 +1,6 @@
 //! Independent `/dev/tty`, cbreak input, bounded viewport and RAII restoration.
 
-use cli_common::Result;
+use crate::error::{Error, Result};
 use ratatui::{
     backend::CrosstermBackend,
     crossterm::{
@@ -142,6 +142,7 @@ impl Session {
                 viewport: Viewport::Fixed(area),
             },
         )
+        .map_err(Error::from)
     }
 
     pub(super) fn new() -> Result<Self> {
@@ -152,7 +153,7 @@ impl Session {
             .custom_flags(rustix::fs::OFlags::NONBLOCK.bits() as i32)
             .open("/dev/tty")?;
         if !termios::tcgetpgrp(&tty).is_ok_and(|group| group == rustix::process::getpgrp()) {
-            return Err(io::Error::other("terminal is no longer in the foreground"));
+            return Err(Error::NotForeground);
         }
         let input = OpenOptions::new()
             .read(true)
@@ -202,7 +203,7 @@ impl ScreenWriter {
 }
 
 impl io::Write for ScreenWriter {
-    fn write(&mut self, bytes: &[u8]) -> Result<usize> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         if !self.owned() {
             // Ratatui Drop may still try to show the cursor. Discard all stale
             // output rather than disturbing the new foreground job.
@@ -211,7 +212,7 @@ impl io::Write for ScreenWriter {
         write_drained(&mut self.file, bytes, STALL_BUDGET)
     }
 
-    fn flush(&mut self) -> Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         if self.owned() {
             io::Write::flush(&mut self.file)
         } else {
@@ -256,14 +257,12 @@ impl ModeGuard {
             return Ok(());
         }
         let attrs = if self.changed {
-            let pending = termios::tcflush(&self.tty, termios::QueueSelector::IFlush)
-                .map_err(io::Error::from);
-            let result = termios::tcsetattr(&self.tty, OptionalActions::Now, &self.saved)
-                .map_err(io::Error::from);
+            let pending = termios::tcflush(&self.tty, termios::QueueSelector::IFlush);
+            let result = termios::tcsetattr(&self.tty, OptionalActions::Now, &self.saved);
             if result.is_ok() {
                 self.changed = false;
             }
-            result.and(pending)
+            result.and(pending).map_err(Error::from)
         } else {
             Ok(())
         };
@@ -276,7 +275,7 @@ impl ModeGuard {
             if result.is_ok() {
                 self.screen = false;
             }
-            result
+            result.map_err(Error::from)
         } else {
             Ok(())
         };

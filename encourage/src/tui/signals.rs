@@ -1,6 +1,6 @@
 //! Async-signal-safe flags and a UI-thread-only job-control mask.
 
-use cli_common::Result;
+use crate::error::Result;
 use signal_hook::{consts::signal::*, SigId};
 use std::{
     io,
@@ -75,11 +75,11 @@ impl JobControlMask {
                 || libc::sigaddset(&mut set, SIGTTOU) != 0
                 || libc::sigaddset(&mut set, SIGTTIN) != 0
             {
-                return Err(io::Error::last_os_error());
+                return Err(io::Error::last_os_error().into());
             }
             let error = libc::pthread_sigmask(libc::SIG_BLOCK, &set, &mut previous);
             if error != 0 {
-                return Err(io::Error::from_raw_os_error(error));
+                return Err(io::Error::from_raw_os_error(error).into());
             }
             Ok(Self { previous })
         }

@@ -1,9 +1,8 @@
 //! Persisted session identity and selection; field names are the on-disk schema.
+use crate::error::{Error, Result};
 use cli_common::{
-    error,
     git::Repo,
     state::{self, Store},
-    Result,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -53,9 +52,7 @@ pub(super) fn select(store: &Store, dir: &Path, repo: &Repo) -> Result<(PathBuf,
             continue;
         }
         let p = e.path().join("manifest.json");
-        let m: Manifest = store
-            .read(&p)?
-            .ok_or_else(|| error("Incomplete session metadata", "会话元数据不完整"))?;
+        let m: Manifest = store.read(&p)?.ok_or_else(|| Error::IncompleteMetadata)?;
         if m.phase != "done"
             && (m.source == state::path_bytes(&repo.root)
                 || m.target == state::path_bytes(&repo.root))
@@ -63,12 +60,12 @@ pub(super) fn select(store: &Store, dir: &Path, repo: &Repo) -> Result<(PathBuf,
             sessions.push((p, m));
         }
     }
-    sessions.sort_by(|a, b| {
-        (a.1.created_order, &a.1.record_id).cmp(&(b.1.created_order, &b.1.record_id))
-    });
     sessions
-        .pop()
-        .ok_or_else(|| error("No managed session here", "当前工作区没有受管理的会话"))
+        .into_iter()
+        .max_by(|a, b| {
+            (a.1.created_order, &a.1.record_id).cmp(&(b.1.created_order, &b.1.record_id))
+        })
+        .ok_or(Error::NoManagedSession)
 }
 pub(super) fn validate_identity(m: &Manifest, r: &Repo) -> Result<()> {
     if m.schema_version != 1
@@ -77,7 +74,7 @@ pub(super) fn validate_identity(m: &Manifest, r: &Repo) -> Result<()> {
         || !m.branch.starts_with("refs/heads/sprinkle/")
         || m.source == m.target
     {
-        return Err(error("Session identity mismatch", "会话身份不匹配"));
+        return Err(Error::IdentityMismatch);
     }
     Ok(())
 }

@@ -6,10 +6,12 @@
 //! and 6 explicitly marked reversible presentation transitions.
 
 pub use cli_common::Language;
+pub use error::{Error, Result};
 
 mod collection;
 pub mod corpus;
 pub mod duration;
+pub mod error;
 pub mod material;
 pub mod pipeline;
 pub mod revision;
@@ -36,7 +38,7 @@ impl Default for Limits {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Error {
+pub enum GenerationError {
     NoExplicitArguments,
     EmptyCandidates,
     RandomSourceEnded,
@@ -48,10 +50,10 @@ pub enum Error {
     MissingEnd,
 }
 
-impl std::fmt::Display for Error {
+impl std::fmt::Display for GenerationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for GenerationError {}
