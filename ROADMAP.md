@@ -1,8 +1,8 @@
 # 实施状态与后续路线图 / Implementation status and roadmap
 
 本文件统一记录**已实现、当前限制、待补验收、后续实现**，不是所有设想都已上线的功能清单。
-首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.5.2`（第三批、afk TUI 及 encourage CLI）。后续交付应同步更新本文件。
-This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.5.2` (batch three, afk TUI and encourage CLI).
+首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.6.0`（第三批、afk TUI 及 encourage CLI）。后续交付应同步更新本文件。
+This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.6.0` (batch three, afk TUI and encourage CLI).
 
 - 当前接口与行为：[中文 README](README-zh.md) / [English README](README.md) 及各工具对应语言 README。
 - 开发约束：[AGENTS.md](AGENTS.md)；业务参数、依赖准入和版本同步以该文件为准。
@@ -10,6 +10,9 @@ This document separates shipped implementations, limitations, outstanding valida
 - **“已实现”不等于全部平台和故障矩阵均已验收。**下面明确区分已有测试与待补项目。
 
 Current contracts live in the root/per-tool READMEs; development rules live in AGENTS. The local, untracked `project.md` is supplementary, not a prerequisite for this roadmap. Implemented does not mean exhaustively validated.
+
+- 发布 / Release：`v0.6.0` 是首个包含全部十五个工具的正式发布包，安装器默认版本同步为 `v0.6.0`。下文各轮记录中的“未打标签/发布”指该轮提交当时的状态。
+  `v0.6.0` is the first published release containing all fifteen tools; the installer default is pinned to it. "Not tagged/released" notes in the round-by-round sections describe the state at that commit.
 
 ## 1. 已交付 / Implemented
 
