@@ -1,0 +1,19 @@
+[package]
+name = "encourage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+cli-common.workspace = true
+clap.workspace = true
+rand.workspace = true
+ratatui.workspace = true
+rustix.workspace = true
+signal-hook.workspace = true
+libc.workspace = true
+blake3.workspace = true
+
+[[example]]
+name = "expanded_replay"

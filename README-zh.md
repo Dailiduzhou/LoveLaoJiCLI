@@ -25,7 +25,7 @@ cargo run -p joy
 cargo run -p patience -- sh -c 'echo hi'
 ```
 
-十四个工具各有独立目录：`love/`、`happiness/`、`joy/`、`patience/`、`sprinkle/`、`later/`、`enough/`、`stuck/`、`duck/`、`one/`、`afk/`、`goodnight/`、`proof/`、`poke/`，共用 `cli-common/`。
+十五个工具各有独立目录：`love/`、`happiness/`、`joy/`、`patience/`、`sprinkle/`、`later/`、`enough/`、`stuck/`、`duck/`、`one/`、`afk/`、`goodnight/`、`proof/`、`poke/`、`encourage/`，共用 `cli-common/`。
 
 ## 交互式安装与卸载
 
@@ -64,18 +64,18 @@ LOVELAOJI_VERSION=v0.5.2 bash install.sh install  # 指定版本
 基于 `uname` 自动选择平台；Linux 包不是 musl 静态包，不支持 Alpine/musl 或 Windows 原生终端。旧系统可尝试源码构建；Git 功能仍需要本机 Git，日期功能需要系统时区数据。macOS 包未经 Apple 签名或公证。
 
 - 安装前需输入 `y` 确认；空输入或 EOF 取消，不下载、不更改配置。
-- 下载十四个工具的对应平台压缩包和 SHA-256 文件，校验摘要、成员列表及版本可执行性后才更新安装。校验失败保留原安装；SHA-256 用于完整性校验，不是独立签名，仍需信任仓库和 HTTPS。
+- 下载十五个工具的对应平台压缩包和 SHA-256 文件，校验摘要、成员列表及版本可执行性后才更新安装。校验失败保留原安装；SHA-256 用于完整性校验，不是独立签名，仍需信任仓库和 HTTPS。
 - 安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`。`install-local` 使用锁定依赖构建本机 release，产物位于 `target/installer/<target>/release/`。
 - 按 `$SHELL` 自动配置 PATH：Bash 使用 `.bashrc` 和生效的登录配置文件；Zsh 使用 `${ZDOTDIR:-$HOME}` 中的 `.zshrc`、`.zprofile`；Fish 使用 `${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/lovelaojicli.fish`。
 - PATH 配置带有项目专属标记，重复安装不会重复添加。安装目录优先于原有 PATH，其他位置的同名程序不会被覆盖。
-- 卸载不需要 Rust 或联网，按安装记录移除十四个工具及本项目 PATH 配置，保留其他配置、文件、用户状态和源码构建产物。
+- 卸载不需要 Rust 或联网，按安装记录移除十五个工具及本项目 PATH 配置，保留其他配置、文件、用户状态和源码构建产物。
 - 脚本提示按 locale 切换中英文。若设置了自定义 XDG 目录，卸载时请保持相同的 `XDG_DATA_HOME`。
 
 **安装后打开新终端即可使用命令**，或执行脚本最后打印的 PATH 命令，立即在当前终端生效。脚本不能直接修改父终端环境，请勿 `source install.sh`。卸载后也请打开新终端刷新 PATH 和命令缓存。
 
 ## 发布
 
-[Release workflow](.github/workflows/release.yml) 在推送稳定版标签 `vX.Y.Z` 时触发，也可通过 Actions 手动指定一个已存在的标签。先在 Linux 上执行完整本地验证，再用四个平台的原生 runner 构建、检查中英文 `--help`/`--version`、打包。每个平台上传一个包含全部十四个工具的 `.tar.gz` 及对应 `.sha256`。所有平台成功后才创建/补全 draft 并正式发布；重跑不会覆盖已公开的版本。
+[Release workflow](.github/workflows/release.yml) 在推送稳定版标签 `vX.Y.Z` 时触发，也可通过 Actions 手动指定一个已存在的标签。先在 Linux 上执行完整本地验证，再用四个平台的原生 runner 构建、检查中英文 `--help`/`--version`、打包。每个平台上传一个包含全部十五个工具的 `.tar.gz` 及对应 `.sha256`。所有平台成功后才创建/补全 draft 并正式发布；重跑不会覆盖已公开的版本。
 
 发布前运行 `bash scripts/bump-version.sh vX.Y.Z`，它会同步 workspace 版本、`Cargo.lock`、`install.sh` 默认版本、`README.md`/`README-zh.md` 的版本示例和 ROADMAP 开发版本，并拒绝残留旧版本或未继承 workspace 版本的 crate；审阅 diff 后提交并打标签。打包脚本会拒绝标签/工作区/安装器版本不一致，或安装器工具列表遗漏二进制的情况。仓库需启用 Actions 并允许发布 job 使用 `contents: write`（其余 job 只读）。
 
@@ -191,7 +191,7 @@ afk 5m --color white          # 全白
 
 - **duck**：依次输出 Expected、Actual、Last change、Next experiment，最后 `quack.`。显式参数齐全时不提问；仅对缺项询问，提示走控制终端，完整结果走 stdout。回答 trim 后须为非空单行、最多 2,000 字符，不含控制字符。缺少前台交互、EOF 或无效交互回答返回 125，stdout 留空；不把管道当回答。无落盘、AI、搜索或技术建议。
 - **one**：所有目录共用一个本地任务列表（最多 1,000 项，每项最多 2,000 字符，trim 后非空单行且无控制字符）。默认随机选中并保存 ID，添加任务不改变选中项；`done` 删除选中任务，下次 `one` 才重新选择。管道或文件重定向按行临时选择，过滤空行、ATX Markdown 标题、已勾选项，去除常见列表前缀；最多读取 1 MiB UTF-8、1,000 项，不是完整 Markdown parser。临时输入完全不访问状态；`add`/`done` 忽略 stdin，`/dev/null` 使用持久化列表。空列表成功；无选中项的 `done` 不会代选。状态损坏、版本未知或锁争用返回 1，不重置列表。
-- **afk**：正整数加 `s/m/h`，最多 24h；单调时钟计时。合适的同一前台终端显示 Ratatui 彩色 ASCII 草地、剩余时间（`--color parts` 默认分区固定色、`rainbow` 彩虹跑马灯、`white` 全白；非空 `NO_COLOR` 优先，切换为终端默认前景色）；普通按键提示 `the grass noticed.`（中文“小草注意到了。”），不惩罚、不重置或延长时长。Ctrl+C 取消；Ctrl+Z 先恢复终端再挂起，时间继续流逝，fg 可重入、bg 不读键盘。非 TTY、输出重定向、TERM 缺失/dumb、后台或启动时小于 24×10 则安静等待，结束仅一行。不使用 Crossterm raw mode，而是保留信号的无回显/非规范输入；RAII 恢复原始 termios、光标和备用屏幕。失去前台归属时放弃旧快照，不覆盖新前台程序的设置或发送清理转义序列。仅 afk 增加 Ratatui/signal-hook/libc 依赖；SIGKILL、外部 SIGSTOP、abort 或终端断连不可保证清理。详见工具 README 的评估与恢复边界。
+- **afk**：正整数加 `s/m/h`，最多 24h；单调时钟计时。合适的同一前台终端显示 Ratatui 彩色 ASCII 草地、剩余时间（`--color parts` 默认分区固定色、`rainbow` 彩虹跑马灯、`white` 全白；非空 `NO_COLOR` 优先，切换为终端默认前景色）；普通按键提示 `the grass noticed.`（中文“小草注意到了。”），不惩罚、不重置或延长时长。Ctrl+C 取消；Ctrl+Z 先恢复终端再挂起，时间继续流逝，fg 可重入、bg 不读键盘。非 TTY、输出重定向、TERM 缺失/dumb、后台或启动时小于 24×10 则安静等待，结束仅一行。不使用 Crossterm raw mode，而是保留信号的无回显/非规范输入；RAII 恢复原始 termios、光标和备用屏幕。失去前台归属时放弃旧快照，不覆盖新前台程序的设置或发送清理转义序列。TUI 依赖限定于 afk 和 encourage（共享行输入另使用可选信号处理）；SIGKILL、外部 SIGSTOP、abort 或终端断连不可保证清理。详见工具 README 的评估与恢复边界。
 
 `one` 的持久化空列表提示 `one add "下一小步"`；临时空输入/过滤后无候选只说“输入中没有可选事项。”，不访问全局状态。无选中项的 `done` 仍不代选。非空输出仍只有任务正文。
 
@@ -224,6 +224,25 @@ poke 明文名单保存在状态根目录的 `poke/names.json`，使用既有私
 
 详解：[goodnight](goodnight/README-zh.md) · [proof](proof/README-zh.md) · [poke](poke/README-zh.md)。
 
+### encourage：词片段鼓励与阶段回放
+
+```sh
+encourage                     # 新的系统随机种子
+encourage hello               # 确定性文本种子，不解读语义
+encourage --duration 30s hello # 播放预算（默认 15s；10s..600s）
+encourage --duration 600s hello | cat # 普通输出仍立即返回
+encourage "one small step"    # 一个参数
+encourage one small step      # 三个参数；种子编码不同
+encourage ""                  # 显式空文本，仍然确定
+encourage -- --help           # 选项形式的文本作为种子材料
+```
+
+`encourage [--duration SECONDS] [TEXT ...]` 不理解输入，生成一句温柔的中文/英文鼓励。独立的 `encourage-gen-v2` 协议新增结构化输出快照、保留 v1 句子，并固定长度前缀 UTF-8 argv、公开 BLAKE3 种子指纹、显式 SplitMix64/拒绝采样和词片段规则。每语言八个结构、34 个组合；仅无文本时读取可失败的系统熵源，不退回时间/PID，不从 stdin 读种子、不启动外部命令、不联网或持久化。文本及其指纹都不保密，也不是匿名化。
+
+至少 80×24、TERM 可用的同一前台终端回放真实、嵌入源码的 Ratatui 阶段：**34 个操作 = 28 个内容操作 + 6 个标记的可逆过渡**，不是 34 个语义变换。默认播放 15s；`--duration` 接受 10s 到 600s 的整数秒，不接受小数或分钟/小时。暂停、小窗口、挂起和后台时间不计入预算。上部开场展示实际当前语言词库中与种子无关的候选原料池，在状态栏明确标注；进入文本阶段后切为当前阶段真实文本，保留顺序，不带类型/调试包装。后续无文本输出仍留空，裁剪提示放在框外；开场候选不填入轨迹或拼接预览。独立拼接预览跟随真实选定片段与词语修订，不按时间揭示预先算好的最终结果。空格暂停，Enter 可提前跳过后再确认，q 始终取消（完成后也取消）；播完等待确认，仅确认后恢复屏幕并输出一次句子。非 TTY/重定向、TERM 缺失/dumb、后台启动和初始小窗口直接仅输出相同句子及换行，不带 ANSI、不等待。非空 `NO_COLOR` 关闭高亮；cbreak 保留信号，Ctrl+Z 恢复后挂起，fg 读取新快照，后台时间不推进播放，失去前台则放弃旧设置和输出。SIGKILL、外部 SIGSTOP、abort 和终端断连无法保证清理。
+
+保留基础 help/version/历史别名；`--duration` 是唯一新增显示选项，不进入种子，不增加其他业务选项或测试环境钩子。参数错误返回 2，运行/输出错误 1，成功/取消 0；受控信号保留信号终止。协议、预算、按键、验证与恢复边界详见 [encourage](encourage/README-zh.md)。工作区/本地安装已包含 encourage；不含它的旧发布压缩包无法通过新安装器校验，发布安装前须升版本并发布完整新压缩包。
+
 ## 语言
 
 按 `LC_ALL` → `LC_MESSAGES` → `LANG` 的顺序，采用首个非空值。
@@ -242,13 +261,14 @@ LC_ALL=en_US.UTF-8 ./target/release/love
 LC_ALL=zh_CN.UTF-8 ./target/release/joy --help
 ```
 
-帮助与默认输出已本地化；版本号不随语言变化，参数错误保留 clap 的英文诊断。
+帮助与默认输出已本地化，版本号不随语言变化。参数错误通常保留 clap 的英文诊断；encourage 使用本地化且不回显输入的参数错误，避免种子文本进入诊断。
 
 ## 代码结构
 
 按职责拆分，CLI 参数与本地记录格式不受模块划分影响。
 
 - `afk/src/tui.rs`：计时与事件循环；`tui/terminal.rs` 管理终端恢复，`tui/signals.rs` 管理信号与 job-control mask。循环保持守卫的创建/析构顺序。
+- `encourage/src/`：CLI/熵源选择、有界播放时长、v1 兼容的词片段生成、结构化原料快照/拼接预览、嵌入源码回放、固定 Rust 高亮和工具独立终端生命周期。
 - `sprinkle/src/`：`manifest` 管理会话元数据，`create` 编排创建事务，`plan` 生成插入计划，`scan` 检查语法边界，`verify` 校验归属，`undo` 执行可恢复撤销。
 - `one/src/`：`input` 处理独立管道输入，`tasks` 封装记录校验与稳定选择，`main` 保留 CLI 和加锁读写。
 - `later/src/`：`main` 编排 CLI 与锁；`card` 管理记录和 Git 上下文采集；`card/display` 只负责展示。
@@ -261,7 +281,7 @@ LC_ALL=zh_CN.UTF-8 ./target/release/joy --help
 
 保留独立本地验证脚本，不安装、不编辑 shell 配置。需要 Rust（含 rustfmt/clippy）、Cargo、Git、Python 3；检查 README 链接/双语一致性和版本同步，再执行安装器隔离测试、fmt、workspace 测试、clippy、锁定依赖 release 构建和跨工具 PTY 验收。产物位于 `target/verify/<target>/release/`。
 
-当前自动化结果见 [ROADMAP.md §3.7](ROADMAP.md#37-长输入重设计与输出错误加固--long-input-redesign-and-output-error-hardening)：macOS 与 Linux aarch64 上 206 项 Rust 测试全部通过、无忽略项（含长输入契约），另有 25 项安装器测试通过。文件系统能力跳过不等于通过；WSL、x86_64 Linux 及 GUI 目视仍待完成。
+当前自动化结果见 [ROADMAP.md §3.10](ROADMAP.md#310-encourage-开场候选原料--encourage-opening-candidate-pool)：macOS 与 Linux aarch64 全量运行均通过 260 项 Rust 测试、无忽略项（含 54 项 encourage 测试和长输入契约），另有 25 项安装器、3 项文档测试通过。两平台的 encourage debug/release PTY 均通过，包含双语开场候选及状态标签、切换当前输出和真实 15s/10s/17s 播放。此前 afk 交接失败仍记在 §3.9，不宣称已修复。文件系统能力跳过不等于通过；WSL、x86_64 Linux、GUI/MSRV 验收和完整终端故障注入矩阵仍待完成。
 
 ```sh
 ./scripts/verify.sh

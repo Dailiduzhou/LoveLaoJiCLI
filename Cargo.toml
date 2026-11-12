@@ -15,6 +15,7 @@ members = [
   "goodnight",
   "proof",
   "poke",
+  "encourage",
 ]
 resolver = "2"
 

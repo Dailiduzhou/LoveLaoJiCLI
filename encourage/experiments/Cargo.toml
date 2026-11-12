@@ -1,0 +1,12 @@
+[package]
+name = "encourage-experiments"
+version = "0.5.2"
+edition = "2021"
+rust-version = "1.89"
+publish = false
+
+# Isolated P0 lab, not an installed tool or a root workspace member.
+[workspace]
+
+[dependencies]
+blake3 = "1"

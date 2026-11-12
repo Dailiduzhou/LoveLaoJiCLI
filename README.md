@@ -25,7 +25,7 @@ cargo run -p joy
 cargo run -p patience -- sh -c 'echo hi'
 ```
 
-All fourteen tools have independent directories: `love/`, `happiness/`, `joy/`, `patience/`, `sprinkle/`, `later/`, `enough/`, `stuck/`, `duck/`, `one/`, `afk/`, `goodnight/`, `proof/` and `poke/`. Each is independently usable; `cli-common/` shares CLI, locale, private state, Git snapshots and execution plumbing.
+All fifteen tools have independent directories: `love/`, `happiness/`, `joy/`, `patience/`, `sprinkle/`, `later/`, `enough/`, `stuck/`, `duck/`, `one/`, `afk/`, `goodnight/`, `proof/`, `poke/` and `encourage/`. Each is independently usable; `cli-common/` shares CLI, locale, private state, Git snapshots and execution plumbing.
 
 ## Interactive installation and uninstallation
 
@@ -64,18 +64,18 @@ The script defaults to `v0.5.2`, not a mutable latest release. Assets must be pu
 Platform selection uses uname. Linux packages use glibc, not static musl; Alpine/musl and native Windows are unsupported. Try source builds on older systems. Git features still require local Git; local dates require system timezone data. macOS binaries are not Apple-signed or notarized.
 
 - Enter `y` to confirm installation; an empty answer or EOF cancels without downloads or configuration changes.
-- The platform archive contains all fourteen tools. Its SHA-256, exact member list and executable versions are checked before updating; verification failures preserve the existing installation. Checksums provide integrity, not independent signatures; trust in the repository and HTTPS is still required.
+- The platform archive contains all fifteen tools. Its SHA-256, exact member list and executable versions are checked before updating; verification failures preserve the existing installation. Checksums provide integrity, not independent signatures; trust in the repository and HTTPS is still required.
 - Install into `${XDG_DATA_HOME:-$HOME/.local/share}/lovelaojicli/bin`. `install-local` uses locked dependencies for a native release build in `target/installer/<target>/release/`.
 - PATH setup follows `$SHELL`: Bash uses `.bashrc` and the effective login profile; Zsh uses `.zshrc` and `.zprofile` under `${ZDOTDIR:-$HOME}`; Fish uses `${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/lovelaojicli.fish`.
 - Project-marked PATH blocks make reinstallation idempotent. The installation directory takes precedence over the existing PATH; same-named programs elsewhere are not overwritten.
-- Offline uninstallation needs no Rust. It removes only the fourteen managed binaries and project PATH blocks, preserving other configuration, files, user state and source-build artifacts.
+- Offline uninstallation needs no Rust. It removes only the fifteen managed binaries and project PATH blocks, preserving other configuration, files, user state and source-build artifacts.
 - Installer prompts follow the locale. Keep the same custom `XDG_DATA_HOME` when uninstalling.
 
 Open a new terminal after installation/uninstallation. To use the tools immediately, run the PATH command printed by the installer. Execute the installer; do not source it.
 
 ## Releases
 
-The [release workflow](.github/workflows/release.yml) runs on stable version tags or manual dispatch with an existing tag. Full Linux validation precedes four native builds and bilingual help/version smoke tests. Each platform provides one archive containing all fourteen tools plus a SHA-256 file. A draft is published only after all builds succeed; published releases cannot be overwritten by a rerun.
+The [release workflow](.github/workflows/release.yml) runs on stable version tags or manual dispatch with an existing tag. Full Linux validation precedes four native builds and bilingual help/version smoke tests. Each platform provides one archive containing all fifteen tools plus a SHA-256 file. A draft is published only after all builds succeed; published releases cannot be overwritten by a rerun.
 
 Before tagging, run `bash scripts/bump-version.sh vX.Y.Z`; it synchronizes the workspace version, lockfile, installer default, examples in both `README.md` and `README-zh.md`, and the ROADMAP dev version, and rejects stale references or crates not inheriting the workspace version. Review the diff, commit, then tag. Packaging rejects version mismatches and installer/workspace tool-list drift. Enable Actions and permit the publish job's `contents: write`; other jobs are read-only.
 
@@ -191,7 +191,7 @@ afk 5m --color white          # all white
 
 - **duck**: Four fixed answers in order, ending with `quack.`. Complete explicit arguments skip prompts; missing answers require a foreground terminal. Prompts use the controlling terminal, the complete summary uses stdout. Answers are trimmed, nonempty, single-line, at most 2,000 characters, without control characters. Missing interaction, EOF or invalid interactive input returns 125 with empty stdout; pipes are not answers. No persistence, AI, search or advice.
 - **one**: One global local list (1,000 tasks maximum; each a trimmed, nonempty single line of up to 2,000 characters, no controls). Selection is persisted until `done` removes it; adding tasks does not change it. The next bare invocation selects again. Piped/redirected UTF-8 input is temporary (1 MiB / 1,000 tasks maximum), filtering blanks, ATX headings and checked items and stripping common list prefixes; not a full Markdown parser. Temporary input never opens state. `add`/`done` ignore stdin; `/dev/null` uses persistent tasks. Empty lists succeed; `done` without selection does not select one. Corruption, unknown schemas or lock contention fail closed with exit 1.
-- **afk**: Positive integer plus `s/m/h`, up to 24h, timed monotonically. A suitable shared foreground terminal gets a colored Ratatui ASCII garden and remaining time (`--color parts` keeps default component colors, `rainbow` animates color bands, `white` is all white; nonempty `NO_COLOR` overrides all modes with the default foreground). Keys show `the grass noticed.` without penalties or timer changes. Ctrl+C cancels; Ctrl+Z restores before stopping, time keeps advancing, fg can resume and bg never reads keys. Non-TTY, redirected output, missing/dumb TERM, background startup or terminals smaller than 24×10 wait quietly and emit one completion line. Cbreak-style input retains signals, with exact termios and screen/cursor RAII restoration—not Crossterm raw mode. On foreground ownership loss, stale settings and cleanup escapes are abandoned rather than applied to the new owner. Ratatui/signal-hook/libc are scoped to afk. SIGKILL, external SIGSTOP, abort or terminal loss cannot guarantee cleanup; see the tool README for evaluation and boundaries.
+- **afk**: Positive integer plus `s/m/h`, up to 24h, timed monotonically. A suitable shared foreground terminal gets a colored Ratatui ASCII garden and remaining time (`--color parts` keeps default component colors, `rainbow` animates color bands, `white` is all white; nonempty `NO_COLOR` overrides all modes with the default foreground). Keys show `the grass noticed.` without penalties or timer changes. Ctrl+C cancels; Ctrl+Z restores before stopping, time keeps advancing, fg can resume and bg never reads keys. Non-TTY, redirected output, missing/dumb TERM, background startup or terminals smaller than 24×10 wait quietly and emit one completion line. Cbreak-style input retains signals, with exact termios and screen/cursor RAII restoration—not Crossterm raw mode. On foreground ownership loss, stale settings and cleanup escapes are abandoned rather than applied to the new owner. TUI dependencies are scoped to afk and encourage (shared line input separately uses optional signal handling). SIGKILL, external SIGSTOP, abort or terminal loss cannot guarantee cleanup; see the tool README for evaluation and boundaries.
 
 Persistent empty `one` lists suggest `one add "next small step"`; empty/fully filtered temporary input says `No selectable tasks in the input.` without opening global state. `done` without selection still never chooses a task. Nonempty output remains task text only.
 
@@ -224,6 +224,25 @@ Third-batch tools never read stdin and work headlessly. Success/conservative unk
 
 Deep dives: [goodnight](goodnight/README.md) · [proof](proof/README.md) · [poke](poke/README.md).
 
+### encourage: Word-fragment encouragement and stage replay
+
+```sh
+encourage                     # fresh system-random seed
+encourage hello               # deterministic text seed, not semantic input
+encourage --duration 30s hello # playback budget (default 15s; 10s..600s)
+encourage --duration 600s hello | cat # plain output still returns immediately
+encourage "one small step"    # one argument
+encourage one small step      # three arguments; different seed encoding
+encourage ""                  # explicit empty text, still deterministic
+encourage -- --help           # option-like text as seed material
+```
+
+`encourage [--duration SECONDS] [TEXT ...]` generates one gentle Chinese/English sentence without understanding the input. The independent `encourage-gen-v2` protocol adds typed output snapshots while retaining v1 sentences, and freezes length-prefixed UTF-8 argv, a public BLAKE3 seed fingerprint, explicit SplitMix64/rejection sampling and word-fragment rules. Each language has eight structures and 34 combinations. Only absent text uses fallible OS entropy; no time/PID fallback, stdin seed input, external commands, network or persistence. Text and its fingerprint are not secret or anonymized.
+
+A shared foreground terminal of at least 80×24 with usable TERM gets the real, embedded-source Ratatui stage replay: **34 operations = 28 content operations + 6 labelled reversible transitions**, not 34 semantic transformations. Playback defaults to 15s; `--duration` accepts integer seconds from 10s through 600s, not fractions or minute/hour units. Pauses, small windows, suspension and background time do not count. The upper box initially shows the actual locale corpus's seed-independent candidate pool, explicitly labelled in the status bar; once textual outputs begin, it switches to the current stage's real text, in order, with no type/debug wrappers. Later textless outputs stay blank, and clipping is reported outside the box. Opening candidates never fill the trace or assembly preview. A separate assembly preview follows actual selected fragments and editorial changes, not a timed reveal of the final result. Space pauses, Enter may skip early then confirms, and q always cancels, including after completion. Playback completion waits for confirmation; only confirmation restores the screen and prints the sentence once. Non-TTY/redirection, missing/dumb TERM, background startup and initially small terminals print only the same sentence and newline immediately, without ANSI or delay. Nonempty `NO_COLOR` suppresses highlighting. Cbreak retains signals; Ctrl+Z restores before suspension, fg takes a fresh snapshot, background time freezes playback and foreground loss abandons stale settings/output. SIGKILL, external SIGSTOP, abort and terminal loss cannot guarantee cleanup.
+
+Basic help/version/legacy alias remain available; `--duration` is the only additional display option and is not seed material. There are no other business options or test environment hooks. Usage errors return 2, runtime/output failures 1, success/cancellation 0; handled signals preserve signal termination. See [encourage](encourage/README.md) for the protocol, budgets, keys, validation and recovery boundaries. Workspace/local installation now includes encourage; an older published archive without it cannot satisfy the updated installer. Bump the version and publish a new complete archive before release installation.
+
 ## Language
 
 The first nonempty value in `LC_ALL` → `LC_MESSAGES` → `LANG` selects the language.
@@ -242,13 +261,14 @@ LC_ALL=en_US.UTF-8 ./target/release/love
 LC_ALL=zh_CN.UTF-8 ./target/release/joy --help
 ```
 
-Help and default messages are localized; versions are language-neutral, and argument errors use clap's English diagnostics.
+Help and default messages are localized; versions are language-neutral. Argument errors generally use clap's English diagnostics; encourage uses a localized, non-echoing usage error to keep seed text out of diagnostics.
 
 ## Code structure
 
 Modules separate responsibilities without changing CLI arguments or persisted record formats.
 
 - `afk/src/tui.rs`: Timer/event loop, terminal restoration, and signal/job-control guards; guard lifetime ordering stays in the loop.
+- `encourage/src/`: CLI/entropy selection, bounded playback duration, v1-compatible word generation, typed material snapshots/assembly preview, embedded-source replay, fixed Rust highlighting and tool-owned terminal lifecycle.
 - `sprinkle/src/`: Session metadata, creation transaction, insertion planning, syntax checks, ownership verification, and resumable undo.
 - `one/src/`: Isolated stdin parsing, validated task model/stable selection, and CLI/locked persistence.
 - `later/src/`: CLI/lock orchestration, card schema/Git capture, and read-only presentation.
@@ -261,7 +281,7 @@ Modules separate responsibilities without changing CLI arguments or persisted re
 
 The local verification script never installs or edits shell configuration. Requires Rust (rustfmt/clippy), Cargo, Git and Python 3. It checks README links/language parity and version synchronization, then runs isolated installer tests, formatting, workspace tests, clippy, a locked release build and cross-tool PTY acceptance. Binaries remain in `target/verify/<target>/release/`.
 
-Current automation (see [ROADMAP.md §3.7](ROADMAP.md#37-长输入重设计与输出错误加固--long-input-redesign-and-output-error-hardening)): on macOS and Linux aarch64, 206 Rust tests pass with none ignored, including the long-input contracts, plus 25 installer tests. Unsupported-capability skips are not passes; WSL, x86_64 Linux and GUI acceptance remain pending.
+Current automation (see [ROADMAP.md §3.10](ROADMAP.md#310-encourage-开场候选原料--encourage-opening-candidate-pool)): full runs on macOS and Linux aarch64 pass 260 Rust tests with none ignored, including 54 encourage tests and the long-input contracts, plus 25 installer and 3 documentation tests. Both platforms pass debug/release encourage PTYs, including labelled bilingual opening candidates, the switch to current outputs and real 15s/10s/17s playback. An earlier afk handoff failure remains recorded in §3.9, not claimed fixed. Unsupported-capability skips are not passes; WSL, x86_64 Linux, GUI/MSRV acceptance and the complete terminal fault-injection matrix remain pending.
 
 ```sh
 ./scripts/verify.sh
