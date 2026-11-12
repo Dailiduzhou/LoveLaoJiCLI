@@ -12,17 +12,69 @@ use ratatui::{
     layout::Rect,
     Terminal, TerminalOptions, Viewport,
 };
+use rustix::event::{poll, PollFd, PollFlags, Timespec};
 use rustix::termios::{self, InputModes, LocalModes, OptionalActions, SpecialCodeIndex, Termios};
 use std::{
     fs::{File, OpenOptions},
     io::{self, IsTerminal},
+    os::fd::AsFd,
     os::unix::fs::OpenOptionsExt,
+    time::{Duration, Instant},
 };
 
 const MIN_COLUMNS: u16 = 80;
 const MIN_ROWS: u16 = 24;
 const MAX_COLUMNS: u16 = 240;
 const MAX_ROWS: u16 = 100;
+
+/// A full PTY, SSH channel or terminal buffer is transient backpressure, not a
+/// broken terminal: retrying keeps the replay alive instead of aborting a live
+/// frame. The budget is bounded so a terminal that never drains still reaches
+/// the restoration path instead of hanging the UI thread.
+const STALL_BUDGET: Duration = Duration::from_secs(2);
+const STALL_TICK: Timespec = Timespec {
+    tv_sec: 0,
+    tv_nsec: 20_000_000,
+};
+
+/// Write one frame piece, waiting for a full output buffer to drain within
+/// `budget`. Our own description stays nonblocking, so writes report
+/// `WouldBlock` instead of blocking a frame; inherited descriptors are untouched.
+fn write_drained<W>(writer: &mut W, bytes: &[u8], budget: Duration) -> io::Result<usize>
+where
+    W: io::Write + AsFd,
+{
+    let deadline = Instant::now() + budget;
+    loop {
+        match writer.write(bytes) {
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                if Instant::now() >= deadline {
+                    return Err(error);
+                }
+                let mut fds = [PollFd::new(writer, PollFlags::OUT)];
+                match poll(&mut fds, Some(&STALL_TICK)) {
+                    Ok(_) | Err(rustix::io::Errno::INTR) => {}
+                    Err(error) => return Err(error.into()),
+                }
+            }
+            result => return result,
+        }
+    }
+}
+
+/// Same retry for the screen/termios escape sequences owned by `ModeGuard`.
+struct Drained<'a>(&'a File);
+
+impl io::Write for Drained<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        write_drained(&mut &*self.0, bytes, STALL_BUDGET)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
 
 pub(super) fn foreground() -> bool {
     termios::tcgetpgrp(io::stdin()).is_ok_and(|group| group == rustix::process::getpgrp())
@@ -156,7 +208,7 @@ impl io::Write for ScreenWriter {
             // output rather than disturbing the new foreground job.
             return Ok(bytes.len());
         }
-        io::Write::write(&mut self.file, bytes)
+        write_drained(&mut self.file, bytes, STALL_BUDGET)
     }
 
     fn flush(&mut self) -> Result<()> {
@@ -191,7 +243,8 @@ impl ModeGuard {
         self.changed = true;
         termios::tcsetattr(&self.tty, OptionalActions::Now, &input)?;
         self.screen = true;
-        execute!(&mut self.tty, EnterAlternateScreen, Hide)?;
+        let mut screen = Drained(&self.tty);
+        execute!(&mut screen, EnterAlternateScreen, Hide)?;
         Ok(())
     }
 
@@ -215,9 +268,10 @@ impl ModeGuard {
             Ok(())
         };
         let screen = if self.screen {
-            let color = execute!(&mut self.tty, ResetColor);
-            let cursor = execute!(&mut self.tty, Show);
-            let alternate = execute!(&mut self.tty, LeaveAlternateScreen);
+            let mut screen = Drained(&self.tty);
+            let color = execute!(&mut screen, ResetColor);
+            let cursor = execute!(&mut screen, Show);
+            let alternate = execute!(&mut screen, LeaveAlternateScreen);
             let result = color.and(cursor).and(alternate);
             if result.is_ok() {
                 self.screen = false;
@@ -233,5 +287,63 @@ impl ModeGuard {
 impl Drop for ModeGuard {
     fn drop(&mut self) {
         let _ = self.restore();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::net::UnixStream;
+
+    /// Fill a nonblocking stream until the kernel reports backpressure.
+    fn stalled() -> (UnixStream, UnixStream) {
+        let (writer, reader) = UnixStream::pair().unwrap();
+        writer.set_nonblocking(true).unwrap();
+        let chunk = [0_u8; 4096];
+        let mut filled = 0;
+        loop {
+            match io::Write::write(&mut &writer, &chunk) {
+                Ok(0) => panic!("stream accepted no bytes"),
+                Ok(size) => filled += size,
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
+                Err(error) => panic!("{error}"),
+            }
+            assert!(filled < 8 * 1024 * 1024, "stream buffer did not fill");
+        }
+        (writer, reader)
+    }
+
+    #[test]
+    fn full_output_buffers_are_retried_until_the_reader_drains_them() {
+        let (mut writer, reader) = stalled();
+        let (drained, was_drained) = std::sync::mpsc::channel();
+        // Hold the reading end open until the write under test has returned:
+        // closing it first would make the retried write report EPIPE instead.
+        let (release, held) = std::sync::mpsc::channel();
+        let drain = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(120));
+            let mut buffer = [0_u8; 8192];
+            assert!(io::Read::read(&mut &reader, &mut buffer).unwrap() > 0);
+            drained.send(()).unwrap();
+            assert!(held.recv_timeout(Duration::from_secs(5)).is_ok());
+        });
+        assert_eq!(
+            write_drained(&mut writer, b"frame", STALL_BUDGET).unwrap(),
+            5
+        );
+        release.send(()).unwrap();
+        was_drained.recv_timeout(Duration::from_secs(5)).unwrap();
+        drain.join().unwrap();
+    }
+
+    #[test]
+    fn a_terminal_that_never_drains_stops_at_the_budget_instead_of_hanging() {
+        let (mut writer, _reader) = stalled();
+        let began = Instant::now();
+        let error = write_drained(&mut writer, b"frame", Duration::from_millis(150)).unwrap_err();
+        let elapsed = began.elapsed();
+        assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+        assert!(elapsed >= Duration::from_millis(140), "{elapsed:?}");
+        assert!(elapsed < Duration::from_secs(2), "{elapsed:?}");
     }
 }
