@@ -85,6 +85,8 @@ pub fn run(
     }
 }
 
+pub mod rainbow;
+
 #[cfg(unix)]
 pub mod git;
 #[cfg(unix)]

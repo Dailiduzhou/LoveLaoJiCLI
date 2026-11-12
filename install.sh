@@ -9,11 +9,11 @@ BIN_DIR="$INSTALL_DIR/bin"
 RECEIPT="$INSTALL_DIR/rc-files"
 BEGIN_MARKER='# >>> LoveLaoJiCLI PATH >>>'
 END_MARKER='# <<< LoveLaoJiCLI PATH <<<'
-TOOLS=(love happiness joy patience sprinkle later enough stuck duck one afk goodnight proof poke)
+TOOLS=(love happiness joy patience sprinkle later enough stuck duck one afk goodnight proof poke encourage)
 RC_FILES=()
 TEMP_FILE=''
 DOWNLOAD_DIR=''
-RELEASE_VERSION=${LOVELAOJI_VERSION:-v0.5.2}
+RELEASE_VERSION=${LOVELAOJI_VERSION:-v0.6.0}
 REPOSITORY='https://github.com/Dailiduzhou/LoveLaoJiCLI'
 cleanup() {
   if [[ -n "$TEMP_FILE" ]]; then rm -f -- "$TEMP_FILE"; fi
@@ -135,7 +135,7 @@ unregister_path() {
   TEMP_FILE=''
 }
 
-# Release archives contain exactly the fourteen regular binaries at their root.
+# Release archives contain exactly the fifteen regular binaries at their root.
 prepare_release() {
   local platform arch target asset base digest actual tool entries
   [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'Only stable vX.Y.Z release tags are supported.' '仅支持稳定版 vX.Y.Z 标签。'

@@ -1,8 +1,8 @@
 # 实施状态与后续路线图 / Implementation status and roadmap
 
 本文件统一记录**已实现、当前限制、待补验收、后续实现**，不是所有设想都已上线的功能清单。
-首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.5.2`（第三批及 afk TUI）。后续交付应同步更新本文件。
-This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.5.2` (batch three and afk TUI).
+首批历史基线：`c10ce88` / `0.2.0`；第二批提交：`d749d8c` / `0.3.0`；当前开发版本为 `0.6.0`（第三批、afk TUI 及 encourage CLI）。后续交付应同步更新本文件。
+This document separates shipped implementations, limitations, outstanding validation and future work. First-batch historical baseline: `c10ce88` / `0.2.0`; second-batch commit: `d749d8c` / `0.3.0`; current development workspace version: `0.6.0` (batch three, afk TUI and encourage CLI).
 
 - 当前接口与行为：[中文 README](README-zh.md) / [English README](README.md) 及各工具对应语言 README。
 - 开发约束：[AGENTS.md](AGENTS.md)；业务参数、依赖准入和版本同步以该文件为准。
@@ -11,10 +11,13 @@ This document separates shipped implementations, limitations, outstanding valida
 
 Current contracts live in the root/per-tool READMEs; development rules live in AGENTS. The local, untracked `project.md` is supplementary, not a prerequisite for this roadmap. Implemented does not mean exhaustively validated.
 
+- 发布 / Release：`v0.6.0` 是首个包含全部十五个工具的正式发布包，安装器默认版本同步为 `v0.6.0`。下文各轮记录中的“未打标签/发布”指该轮提交当时的状态。
+  `v0.6.0` is the first published release containing all fifteen tools; the installer default is pinned to it. "Not tagged/released" notes in the round-by-round sections describe the state at that commit.
+
 ## 1. 已交付 / Implemented
 
-十四个工具均在 workspace 和安装/卸载清单中，可独立使用；共用 locale 与基础 help/version/verison 契约。
-All fourteen tools are workspace members and installer entries, independently usable with shared locale and basic CLI conventions.
+十五个工具均在 workspace 和安装/卸载清单中，可独立使用；共用 locale 与基础 help/version/verison 契约。
+All fifteen tools are workspace members and installer entries, independently usable with shared locale and basic CLI conventions.
 
 | 批次 / Batch | 工具 / Tool | 当前范围 / Current scope | 文档 / Docs |
 |---|---|---|---|
@@ -30,6 +33,7 @@ All fourteen tools are workspace members and installer entries, independently us
 | 第三批 1 / Batch 3.1 | `goodnight` | 只读时间、Git 与显式执行收尾摘要 / Read-only time, Git and execution summary | [中文](goodnight/README-zh.md) · [English](goodnight/README.md) |
 | 第三批 2 / Batch 3.2 | `proof` | 当日本地当前 HEAD / workspace 已有证据 / Today's local current-HEAD/workspace evidence | [中文](proof/README-zh.md) · [English](proof/README.md) |
 | 第三批 3 / Batch 3.3 | `poke` | 本地名单、精确去重、随机问候建议 / Local names, exact deduplication, random greeting suggestion | [中文](poke/README-zh.md) · [English](poke/README.md) |
+| 新增 / Additional | `encourage` | UTF-8 文本种子、词片段生成与真实阶段回放 / UTF-8 text seeds, word-fragment generation and real stage replay | [中文](encourage/README-zh.md) · [English](encourage/README.md) |
 
 共享能力已落在 `cli-common/`，没有另建通用框架：
 Shared capabilities remain in `cli-common/`, without a separate framework:
@@ -248,6 +252,76 @@ Approved B1 delivery plus stdout write-failure hardening. No new tools, public o
 - 仍待 / Still pending：WSL、x86_64 Linux、GUI 终端目视/字体/主题、长时间与全部 I/O/信号竞态；morning 仍为提案。
 
 B1 is resolved with an approved, feature-gated dependency scope; both platforms pass the full suite with no ignored tests. WSL, x86_64 Linux and GUI acceptance remain pending.
+
+### 3.8 encourage CLI 集成与验证 / Encourage CLI integration and validation
+
+已将原隔离开发 crate 的生成器与 TUI 组装为正式 `encourage [TEXT ...]`；本轮不是重新设计或用整句库替换真实主链。`encourage-gen-v1` 固定显式 argv 编码、公开 BLAKE3 指纹、SplitMix64/拒绝采样、选择顺序、词库/修订规则、格式与观测契约。34 个操作仍为 **28 内容 + 6 可逆过渡**。无文本时才使用可失败的 OsRng；显式空参数不等于无参数；不读 stdin 种子、不持久化、不启动外部命令、不增加公开业务选项或环境测试钩子。
+The former development generator and TUI now form the production CLI. Generation v1 freezes the deterministic mapping and word rules; the 34-operation chain remains 28 content operations plus 6 reversible transitions. Only absent text requests fallible OS entropy; no stdin seed, persistence, external commands, extra business options or production test hooks.
+
+- **接线 / Wiring**：复用 cli-common locale/Clap，严格 UTF-8、保留参数边界；本地化参数错误不回显输入。普通模式不采集预览、不延时，只写句子及换行；TUI 确认前不写最终结果，取消不写句子，受控信号恢复后按默认动作终止。
+- **协议回归 / Protocol regression**：固定 argv/RNG 向量、全部 68 个有序双语结果快照、10,000 个种子 × 双语与独立参考比较、预算/拒绝重试、真实增删和惰性顺序、轨迹开关不影响选择。未知来源 ID/数量仍保持未知，不因 CLI 集成而补造。
+- **集成 / Integration**：workspace 继承版本、根 Cargo.lock、install.sh、双语根/工具 README、AGENTS 同步；删除失效的开发 crate 独立锁文件。历史 experiments 继续独立。verify.sh 增加 release 二进制 PTY，发布工作流增加原生 encourage 测试。
+
+实际验证 / Actual validation（rustc 1.99.1）：
+
+| 环境 / Environment | Rust 测试 / Rust tests | 安装器 / Installer | 文档 / Documentation |
+|---|---|---|---|
+| macOS / Darwin 25.6.0 / Apple Silicon，原生 Bash 3.2 | 249 passed、0 failed、0 ignored | 25 passed | 3 passed |
+| Linux aarch64，Docker Debian trixie、git 2.47.3，禁用网络 | 249 passed、0 failed、0 ignored | 25 passed | 3 passed |
+
+- macOS 完整 `bash scripts/verify.sh` 通过；Linux 运行 locked/offline workspace all-targets tests、workspace Clippy、encourage release 构建及 release PTY；两个平台 fmt/Clippy 无警告。本轮日志没有能力跳过。
+- encourage 共 43 项 Rust 测试，包含调用真实 CLI 的 PTY 驱动；debug/release 均覆盖自动播放、双语确认、空格/Enter/q、80×24 高亮/NO_COLOR、Ctrl+C/SIGTERM/SIGHUP/SIGQUIT、resize、Ctrl+Z/恢复、前台归属替换及保守降级，检查 termios、屏幕/光标和继承 I/O 模式。熵源错误由纯单元测试接口注入。
+- 原生 macOS Bash 3.2 在临时 HOME 下实际 `install-local` 安装十五个 release 二进制，运行已安装 encourage 的版本、固定文本输出和 PTY，再卸载通过；没有修改用户 HOME。
+- 保持包版本 `0.5.2`，未打标签或发布。旧十四工具发布包不能满足更新后安装器的精确列表；正式发布前必须运行 bump-version 并发布新的十五工具压缩包。
+
+仍待 / Still pending：WSL、x86_64 Linux、真实 GUI 终端字体/主题与视觉验收、最低 Rust 1.89 环境、完整初始化/绘制故障注入及 panic-unwind PTY、长时间与全部信号/I/O 竞态。不能从上述通过结果推断这些矩阵完成。
+Both tested platforms pass the full suite and real debug/release CLI PTYs; native macOS real installation also passes. WSL, x86_64 Linux, GUI/MSRV and the complete terminal fault/race matrix remain unverified. No release was published.
+
+### 3.9 encourage 可配置时长与原料预览 / Encourage duration and material preview
+
+本轮先经 grilling 逐项确认，随后实现 `encourage [--duration SECONDS] [TEXT ...]`：默认 **15s**，仅接受带小写 s 的 **10s..600s 整数秒**；时长只控制有效自动播放，暂停/小窗口/挂起/后台与确认等待不计时，也不进入种子。Enter 可提前跳到最后阶段，再次 Enter 确认；q 在完成后也始终取消且不输出。非交互模式即使指定 600s 仍立即输出。
+After explicit design confirmation, playback now defaults to 15s and accepts integer seconds from 10s through 600s. Only active playback consumes the budget; duration never changes seed text or delays plain output. Enter skips then confirms, automatic completion waits, and q always cancels.
+
+- **调度 / Scheduling**：以总预算与动态阶段数做有理数调度，不把逐阶段向下取整误差累积到总时长；状态栏显示有效已播放时间/总预算。保留 34 = 28 内容 + 6 可逆过渡，不按时长增删操作或随机取数。
+- **原料 / Material**：新增工具私有的结构化文本快照，观察实际输出，不解析 Debug 字符串；上部框内只有文本，保留顺序/重复，无类型、ID、包装或计数。初版无文本的选择器/请求阶段留空（开场展示已由 3.10 节候选池方案替代）；换行/裁剪提示在框外，未知来源/数量不推造。
+- **拼接 / Assembly**：独立预览按当前选定原料与真实增删更新，允许暂时不完整/打乱/未大写，不从预计算的最终句子提前取字；实际拼接完整时可显示完整内容，完成时改标“最终句子”。候选集合不伪装成一句话，fold 展示真实最终标量而非累积历史。
+- **协议 / Protocol**：升级 `encourage-gen-v2` 观测契约，保留 v1 参数编码、BLAKE3 种子、RNG 消费、词库/排序和全部最终句子。每阶段最多保留 256 个文本片段/4,096 UTF-8 字节及真实省略计数；plain 不采集原料。包版本保持 `0.5.2`，未打标签/发布；无新依赖、持久化或生产环境测试钩子。
+- **回归 / Regression**：保留全部 68 个有序 v1 结果 fixture 和 10,000 个双语种子独立参考比较；新增时长解析/边界、动态阶段精确预算、真实阶段文本/插删/大小写预览、上部纯文本与裁剪、参数不进入种子、完成后 q 取消等断言。真实 PTY 实测默认 15s、指定 10s/17s，检查完成后等待确认、600s 可跳过且普通输出不等待。
+
+本轮实际验证 / Actual validation（rustc 1.99.1）：
+
+| 环境 / Environment | Rust 测试 / Rust tests | 安装器 / Installer | 文档 / Documentation |
+|---|---|---|---|
+| macOS / Darwin 25.6.0 / Apple Silicon，原生 Bash 3.2 | 257 passed、0 failed、0 ignored | 25 passed | 3 passed |
+| Linux aarch64，Docker Debian trixie，禁用网络（全量复跑） | 257 passed、0 failed、0 ignored | 25 passed | 3 passed |
+
+macOS 完整 `scripts/verify.sh` 通过；Linux 执行 fmt、locked/offline workspace all-targets tests、workspace Clippy、encourage release 构建与 release PTY。encourage 共 51 项 Rust 测试；两个平台 debug/release 均实际计时 15s/10s/17s 自动播放、完成后确认等待/q 取消、600s 跳过/普通模式立即输出，并保留双语、信号/挂起/resize/归属替换与精确 termios 恢复检查。所有 v1 句子 fixture 保持原样，本轮最终通过日志没有能力跳过。
+
+**保留失败记录 / Retained failure:** Linux 首轮全量运行在未改动的 `afk/tests/afk_ownership_pty.py` 捕获前台交接后一个残余 ANSI 字节而失败，尚未运行到 encourage；随后同一命令全量复跑通过。未修改 afk，未定位/宣称修复该交接竞态，也不把首轮记为通过。
+The final full runs and real debug/release encourage PTYs pass on both platforms. The initial Linux run failed in the unchanged afk ownership PTY on a residual ANSI byte after handoff; the full rerun passed. That unresolved observation is retained, not treated as a fixed race or an initial clean run.
+
+仍待 / Still pending：WSL、x86_64 Linux、真实终端 GUI、Rust 1.89 最低版本、完整初始化/绘制故障注入与 panic-unwind PTY、长期及全部 I/O/信号竞态。保持包版本 `0.5.2`，未打标签或发布。
+
+### 3.10 encourage 开场候选原料 / Encourage opening candidate pool
+
+用户反馈开场空白观感不自然，经确认改为：首个文本输出之前，上部读取当前语言真实词库的固定词、全部候选和标点，按声明顺序保留重复，状态栏明确标为“候选原料 / Candidate pool”；进入文本阶段后切换“当前输出 / Current output”。只替换开场非文本前缀，后续无文本输出仍留空，不回填候选池。
+After confirmation, the opening non-text prefix now displays the real locale corpus as a clearly labelled, seed-independent candidate pool. It switches to actual current outputs when text first appears, without replacing later empty outputs.
+
+- 展示上下文不是当前操作输出，不读取选中结构、后续轨迹或最终句子，不进入真实轨迹/拼接预览。使用按语言惰性初始化的有界缓存，沿用 256 片段 / 4,096 字节上限、换行及框外裁剪提示；不按固定阶段编号判断开场。
+- 生成、RNG、v1 句子 fixture、v2 结构化轨迹及协议标识不变；这是纯显示调整，包版本仍为 0.5.2，未发布、不增加依赖或测试钩子。
+- 新增 3 项 Rust 测试：双语真实词库/顺序/重复/边界；跨种子开场一致、80×24 首个文本前全阶段非空且预览不被填充、精确切换及轨迹不变；后续空输出/空轨迹不回退。真实 CLI PTY 检查双语初始原料及状态标签，自动播放检查切换真实输出。
+
+本轮实际验证 / Actual validation（rustc 1.99.1）：
+
+| 环境 / Environment | Rust 测试 / Rust tests | 安装器 / Installer | 文档 / Documentation |
+|---|---|---|---|
+| macOS / Darwin 25.6.0 / Apple Silicon，原生 Bash 3.2 | 260 passed、0 failed、0 ignored | 25 passed | 3 passed |
+| Linux aarch64，Docker Debian trixie，禁用网络 | 260 passed、0 failed、0 ignored | 25 passed | 3 passed |
+
+macOS 完整 `scripts/verify.sh` 通过，并重建 `target/release/encourage`；Linux locked/offline workspace all-targets tests、fmt、Clippy、release 构建及真实 PTY 通过。encourage 共 54 项 Rust 测试；两个平台 debug/release 均通过增强后的开场候选检查、文本阶段切换及原有时长/信号/挂起/resize/归属/精确恢复回归。最终日志无能力跳过；v1 句子 fixture 和 v2 观测不变。
+Both platforms pass the full regression and enhanced real debug/release CLI PTYs. Opening context is visible in both languages; current outputs and unchanged generation/observation contracts remain verified.
+
+首个并行执行器调用达到 300s 时限，不视为完整通过；Linux 容器随后完成且退出 0（取回完整日志），macOS 延长时限后重新全量通过，没有修改或跳过慢测试。3.9 节记录的 afk 交接竞态及仍待平台/故障注入边界继续保留，不因本轮通过而声称已修复/验收。
 
 ## 4. 第二批：本轮交付 / Batch two: delivered this round
 

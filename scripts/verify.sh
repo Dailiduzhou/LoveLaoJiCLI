@@ -13,4 +13,6 @@ host=$(rustc -vV | awk '/^host: / { print $2 }')
 [[ -n "$host" ]]
 cargo build --locked --release --workspace --target "$host" --target-dir "$ROOT/target/verify"
 python3 tests/report_records_pty.py "$ROOT/target/verify/$host/release"
+python3 encourage/tests/replay_pty.py "$ROOT/target/verify/$host/release/encourage"
+python3 encourage/tests/ownership_pty.py "$ROOT/target/verify/$host/release/encourage"
 printf 'Validation passed. Binaries: %s\n' "$ROOT/target/verify/$host/release"
